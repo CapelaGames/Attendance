@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TAFE NSW — Attendance</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0f1117;
+      --surface:      #1a1d27;
+      --border:       #2a2e3f;
+      --accent:       #4f8ef7;
+      --green-bg:     #0a2118;
+      --green-border: #2ea84a;
+      --green-text:   #5dde80;
+      --text:         #e8eaf0;
+      --muted:        #6b7280;
+      --red:          #f87171;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ────────────────────────────────── Welcome screen */
+    #screen-welcome {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 30px;
+    }
+    .welcome-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 48px 40px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+    }
+    .welcome-box h1 {
+      font-size: 2rem;
+      color: var(--accent);
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+    .welcome-box .tagline {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-bottom: 36px;
+      line-height: 1.6;
+    }
+    .welcome-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .btn-big {
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .btn-big.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn-big.primary:hover { background: #3a7de8; border-color: #3a7de8; }
+    .btn-big.secondary {
+      background: transparent;
+      color: var(--muted);
+      border-color: var(--border);
+    }
+    .btn-big.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ────────────────────────────────── Kiosk screen */
+    #screen-kiosk { display: none; }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 15px 26px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .brand h1 { font-size: 1.35rem; font-weight: 700; color: var(--accent); }
+    .brand .sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+    .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .date-pill {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 13px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      font-family: inherit;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.accent { border-color: var(--accent); color: var(--accent); }
+
+    .search-wrap { padding: 18px 26px 6px; }
+    input[type="search"] {
+      width: 100%;
+      padding: 15px 18px;
+      font-size: 1.2rem;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+    input[type="search"]:focus { border-color: var(--accent); }
+    input[type="search"]::placeholder { color: var(--muted); }
+
+    .stats {
+      padding: 8px 26px;
+      font-size: 0.83rem;
+      color: var(--muted);
+      min-height: 26px;
+    }
+    .stats b { color: var(--green-text); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      gap: 12px;
+      padding: 8px 26px 40px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 14px 18px;
+      cursor: pointer;
+      text-align: center;
+      user-select: none;
+      transition: transform 0.1s, border-color 0.15s, background 0.18s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .card:active { transform: scale(0.96); }
+    .card.present { background: var(--green-bg); border-color: var(--green-border); }
+    .card.present:hover { border-color: #4dce6a; }
+
+    .card-icon { font-size: 1.9rem; margin-bottom: 9px; }
+    .card-name { font-size: 1rem; font-weight: 600; line-height: 1.3; margin-bottom: 5px; }
+    .card-status { font-size: 0.77rem; font-weight: 500; color: var(--muted); }
+    .card.present .card-status { color: var(--green-text); }
+
+    .no-results {
+      display: none;
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 50px;
+      color: var(--muted);
+    }
+
+    /* ────────────────────────────────── Modals / panels */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .overlay.open { display: flex; }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px;
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .panel h2 { font-size: 1.1rem; margin-bottom: 8px; }
+    .panel .hint { font-size: 0.82rem; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+
+    textarea {
+      width: 100%;
+      height: 200px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: inherit;
+      padding: 12px;
+      resize: vertical;
+      outline: none;
+    }
+    textarea:focus { border-color: var(--accent); }
+
+    .panel-actions { display: flex; gap: 10px; margin-top: 14px; justify-content: flex-end; flex-wrap: wrap; }
+
+    /* Sheet table */
+    .sheet-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th {
+      background: #141720;
+      padding: 10px 14px;
+      text-align: center;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    th:first-child { text-align: left; color: var(--text); min-width: 160px; }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #161920;
+      text-align: center;
+      background: var(--bg);
+    }
+    tr:nth-child(even) td { background: #111420; }
+    tr:hover td { background: #1c2035; }
+    td:first-child { text-align: left; font-weight: 500; }
+    .p-badge {
+      display: inline-block;
+      background: var(--green-bg);
+      color: var(--green-text);
+      border: 1px solid var(--green-border);
+      border-radius: 5px;
+      padding: 2px 8px;
+      font-size: 0.76rem;
+      font-weight: 700;
+    }
+    .dash { color: #2a2e3f; }
+
+    .sheet-summary { margin-top: 12px; font-size: 0.8rem; color: var(--muted); }
+    .sheet-summary b { color: var(--green-text); }
+
+    /* ────────────────────────────────── History panel */
+    .history-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .history-nav .nav-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color 0.15s;
+      flex-shrink: 0;
+    }
+    .history-nav .nav-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .history-nav .nav-btn:disabled { opacity: 0.3; cursor: default; }
+    .history-date {
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-align: center;
+      flex: 1;
+    }
+    .history-date .session-num { font-size: 0.75rem; color: var(--muted); font-weight: 400; display: block; margin-top: 2px; }
+
+    .history-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .history-col h3 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .history-col.present-col h3 { color: var(--green-text); }
+    .history-col.absent-col h3 { color: var(--muted); }
+
+    .history-name {
+      font-size: 0.88rem;
+      padding: 6px 10px;
+      border-radius: 7px;
+      margin-bottom: 4px;
+    }
+    .present-col .history-name { background: var(--green-bg); color: var(--green-text); }
+    .absent-col .history-name { color: var(--muted); }
+
+    .history-empty { color: var(--muted); font-size: 0.85rem; font-style: italic; padding: 6px 0; }
+    .history-summary { margin-top: 16px; font-size: 0.8rem; color: var(--muted); text-align: center; }
+    .history-summary b { color: var(--green-text); }
+
+    /* ────────────────────────────────── Toast */
+    #toast {
+      position: fixed;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%) translateY(70px);
+      background: var(--green-bg);
+      border: 1px solid var(--green-border);
+      color: var(--green-text);
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 0.98rem;
+      font-weight: 600;
+      transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s;
+      opacity: 0;
+      z-index: 200;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.warn { background: #1a1020; border-color: #7c4dff; color: #b39ddb; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════ WELCOME SCREEN ══════════════════════════ -->
+<div id="screen-welcome">
+  <div class="welcome-box">
+    <h1>TAFE NSW<br>Attendance</h1>
+    <p class="tagline">Set up your class list once,<br>then students tap their name each session.</p>
+    <div class="welcome-actions">
+      <button class="btn-big primary" onclick="openPanel('panel-add')">Add student names</button>
+      <button class="btn-big secondary" onclick="triggerImport()">Import existing CSV file</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ KIOSK SCREEN ══════════════════════════ -->
+<div id="screen-kiosk">
+  <header>
+    <div class="brand">
+      <h1>TAFE NSW — Attendance</h1>
+      <div class="sub">Tap your name to mark yourself present</div>
+    </div>
+    <div class="header-right">
+      <div class="date-pill" id="date-display">—</div>
+      <button class="btn" id="sort-btn" onclick="toggleSort()" title="Change sort order">Sort: First name</button>
+      <button class="btn accent" onclick="openPanel('panel-add')">+ Students</button>
+      <button class="btn" onclick="refreshFromFile()" title="Reload data from the linked CSV file">↻ Refresh</button>
+      <button class="btn" onclick="openHistory()">Past Sessions</button>
+      <button class="btn" onclick="openPanel('panel-sheet')">Full Sheet</button>
+      <button class="btn" onclick="exportCSV()">Export CSV</button>
+      <span id="save-indicator" onclick="if(!fileHandle)triggerImport()"
+        style="font-size:0.75rem;padding:7px 10px;border-radius:8px;border:1px solid var(--border);cursor:pointer;white-space:nowrap"
+        title="Click to link a CSV file for auto-saving"></span>
+    </div>
+  </header>
+
+  <div class="search-wrap">
+    <input type="search" id="search" placeholder="Search your name…" autocomplete="off">
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="grid" id="grid">
+    <div class="no-results" id="no-results">
+      <div id="no-results-msg">No student found.</div>
+      <button id="add-inline-btn" class="btn-big primary" style="display:none;margin:16px auto 0;max-width:300px" onclick="addInlineStudent()"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ ADD STUDENTS PANEL ══════════════════════════ -->
+<div class="overlay" id="panel-add" onclick="overlayClick(event, 'panel-add')">
+  <div class="panel">
+    <h2>Add Students</h2>
+    <p class="hint">Type or paste student names, one per line.<br>
+      Names already in the list will be skipped.</p>
+    <textarea id="names-input" placeholder="Jane Smith&#10;John Doe&#10;Alex Kim&#10;..."></textarea>
+    <div class="panel-actions">
+      <button class="btn" onclick="closePanel('panel-add')">Cancel</button>
+      <button class="btn accent" onclick="submitNames()">Save to class list</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ SHEET PANEL ══════════════════════════ -->
+<div class="overlay" id="panel-sheet" onclick="overlayClick(event, 'panel-sheet')">
+  <div class="panel" style="max-width:700px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <h2 style="margin:0">Full Attendance Sheet</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn accent" onclick="exportCSV()">Export CSV</button>
+        <button class="btn" onclick="closePanel('panel-sheet')">Close</button>
+      </div>
+    </div>
+    <div id="sheet-content">Loading…</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ PAST SESSIONS PANEL ══════════════════════════ -->
+<div class="overlay" id="panel-history" onclick="overlayClick(event, 'panel-history')">
+  <div class="panel" style="max-width:540px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <h2 style="margin:0">Past Sessions</h2>
+      <button class="btn" onclick="closePanel('panel-history')">Close</button>
+    </div>
+    <div class="history-nav">
+      <button class="nav-btn" id="hist-prev" onclick="historyNav(-1)">&#8592;</button>
+      <div class="history-date" id="hist-date-label">—</div>
+      <button class="nav-btn" id="hist-next" onclick="historyNav(+1)">&#8594;</button>
+    </div>
+    <div class="history-cols" id="hist-cols"></div>
+    <div class="history-summary" id="hist-summary"></div>
+  </div>
+</div>
+
+<!-- Hidden file input for CSV import -->
+<input type="file" id="csv-import" accept=".csv" style="display:none">
+
+<div id="toast"></div>
+
+<script>
+  // ─── Storage key ───────────────────────────────────────────────────────────
+  const KEY = 'tafe_attendance_v1';
+
+  // ─── Sort order ────────────────────────────────────────────────────────────
+  let sortBy = localStorage.getItem('tafe_sort') || 'first'; // 'first' | 'last'
+
+  function sortKey(name) {
+    const parts = name.trim().split(/\s+/);
+    return sortBy === 'last'
+      ? (parts.slice(-1)[0] + ' ' + parts.slice(0, -1).join(' ')).toLowerCase()
+      : name.toLowerCase();
+  }
+
+  function toggleSort() {
+    sortBy = sortBy === 'first' ? 'last' : 'first';
+    localStorage.setItem('tafe_sort', sortBy);
+    document.getElementById('sort-btn').textContent = sortBy === 'first' ? 'Sort: First name' : 'Sort: Last name';
+    state.rows.sort((a, b) => sortKey(a[0] || '').localeCompare(sortKey(b[0] || '')));
+    saveState();
+    renderGrid();
+  }
+
+  // ─── State ─────────────────────────────────────────────────────────────────
+  // { headers: ['Name', 'dd/mm/yyyy', ...], rows: [['Name', 'P', ''], ...] }
+  let state = null;
+
+  // ─── Date helpers ──────────────────────────────────────────────────────────
+  function today() {
+    const d = new Date();
+    return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
+  }
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  // ─── Persistence ───────────────────────────────────────────────────────────
+  function loadState() {
+    const raw = localStorage.getItem(KEY);
+    return raw ? JSON.parse(raw) : null;
+  }
+  function saveState() {
+    localStorage.setItem(KEY, JSON.stringify(state));
+    autoSave(); // also write to linked CSV file if one is open
+  }
+
+  // ─── Ensure today's column exists ──────────────────────────────────────────
+  // Parse a date header into {day, month, year} regardless of leading zeros or separator
+  function parseHeaderDate(h) {
+    const m = h.match(/^(\d{1,4})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+    if (!m) return null;
+    let [, a, b, c] = m.map(Number);
+    // yyyy-mm-dd (ISO) vs dd/mm/yyyy
+    if (a > 31) return { year: a, month: b, day: c };
+    return { day: a, month: b, year: c < 100 ? 2000 + c : c };
+  }
+
+  function ensureToday() {
+    const t = today();
+    const d = new Date();
+    const target = { day: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear() };
+
+    // Find an existing column that represents today, regardless of format
+    const existingIdx = state.headers.findIndex((h, i) => {
+      if (i === 0) return false;
+      const parsed = parseHeaderDate(h);
+      return parsed && parsed.day === target.day && parsed.month === target.month && parsed.year === target.year;
+    });
+
+    if (existingIdx !== -1) {
+      // Normalise to standard format in case it was reformatted by Excel/LibreOffice
+      state.headers[existingIdx] = t;
+      return;
+    }
+
+    // No match — add a new column for today
+    state.headers.push(t);
+    state.rows.forEach(r => { while (r.length < state.headers.length) r.push(''); });
+    saveState();
+  }
+
+  function todayCol() { return state.headers.indexOf(today()); }
+
+  // ─── Screens ───────────────────────────────────────────────────────────────
+  function showKiosk() {
+    document.getElementById('screen-welcome').style.display = 'none';
+    document.getElementById('screen-kiosk').style.display = 'block';
+    document.getElementById('date-display').textContent = today();
+  }
+  function showWelcome() {
+    document.getElementById('screen-welcome').style.display = 'flex';
+    document.getElementById('screen-kiosk').style.display = 'none';
+  }
+
+  // ─── Render grid ───────────────────────────────────────────────────────────
+  function renderGrid() {
+    const grid = document.getElementById('grid');
+    const noRes = document.getElementById('no-results');
+    const col = todayCol();
+
+    // Build sorted student list
+    const students = state.rows
+      .map((r, i) => ({ i, name: r[0] || '', present: (r[col] || '').toUpperCase() === 'P' }))
+      .filter(s => s.name.trim())
+      .sort((a, b) => sortKey(a.name).localeCompare(sortKey(b.name)));
+
+    // Clear existing cards (keep no-results div)
+    Array.from(grid.querySelectorAll('.card')).forEach(c => c.remove());
+
+    // Update subtitle based on whether any students exist
+    const sub = document.querySelector('.brand .sub');
+    if (sub) {
+      sub.textContent = students.length === 0
+        ? 'Type your name above to join the class'
+        : 'Tap your name to mark yourself present';
+    }
+
+    students.forEach(s => {
+      const card = document.createElement('div');
+      card.className = 'card' + (s.present ? ' present' : '');
+      card.dataset.rowIndex = s.i;
+      card.dataset.name = s.name.toLowerCase();
+      card.innerHTML = `
+        <div class="card-icon">${s.present ? '✓' : '○'}</div>
+        <div class="card-name">${escHtml(s.name)}</div>
+        <div class="card-status">${s.present ? 'Present' : 'Not marked'}</div>
+      `;
+      card.addEventListener('click', () => toggleMark(s.i, card));
+      grid.insertBefore(card, noRes);
+    });
+
+    applySearch();
+  }
+
+  function updateStats() {
+    const cards = Array.from(document.querySelectorAll('.card'));
+    const visible = cards.filter(c => c.style.display !== 'none');
+    const present = visible.filter(c => c.classList.contains('present')).length;
+    const all = cards.length;
+    const el = document.getElementById('stats');
+    if (!all) { el.textContent = ''; return; }
+    const prefix = visible.length < all ? `Showing ${visible.length} of ${all}` : `${all}`;
+    el.innerHTML = `${prefix} students &nbsp;·&nbsp; <b>${present}</b> present today`;
+  }
+
+  // ─── Mark attendance ───────────────────────────────────────────────────────
+  function toggleMark(rowIndex, card) {
+    card.style.pointerEvents = 'none';
+    const col = todayCol();
+    const row = state.rows[rowIndex];
+    const wasPresent = (row[col] || '').toUpperCase() === 'P';
+    row[col] = wasPresent ? '' : 'P';
+    saveState();
+
+    const present = !wasPresent;
+    card.classList.toggle('present', present);
+    card.querySelector('.card-icon').textContent = present ? '✓' : '○';
+    card.querySelector('.card-status').textContent = present ? 'Present' : 'Not marked';
+    updateStats();
+
+    const name = row[0];
+    showToast(present ? `✓  ${name} — marked present` : `Unmarked: ${name}`, present ? '' : 'warn');
+    card.style.pointerEvents = '';
+  }
+
+  // ─── Search ────────────────────────────────────────────────────────────────
+  document.getElementById('search').addEventListener('input', applySearch);
+
+  function toTitleCase(str) {
+    return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function applySearch() {
+    const raw = document.getElementById('search').value.trim();
+    const q = raw.toLowerCase();
+    const cards = document.querySelectorAll('.card');
+    let visible = 0;
+    cards.forEach(c => {
+      const match = !q || c.dataset.name.includes(q);
+      c.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    const noResults = document.getElementById('no-results');
+    const addBtn = document.getElementById('add-inline-btn');
+    const noResultsMsg = document.getElementById('no-results-msg');
+    const noStudentsAtAll = cards.length === 0;
+    const showNoResults = (visible === 0 && cards.length > 0) || (noStudentsAtAll && raw);
+    noResults.style.display = (showNoResults || noStudentsAtAll) ? 'block' : 'none';
+    if (raw) {
+      const titled = toTitleCase(raw);
+      noResultsMsg.textContent = noStudentsAtAll
+        ? `No one in the class yet.`
+        : `"${titled}" is not in the class list.`;
+      addBtn.textContent = `+ Add "${titled}" to class`;
+      addBtn.style.display = 'block';
+    } else if (noStudentsAtAll) {
+      noResultsMsg.textContent = 'Type your name in the search bar above.';
+      addBtn.style.display = 'none';
+    } else {
+      noResultsMsg.textContent = 'No student found.';
+      addBtn.style.display = 'none';
+    }
+    updateStats();
+  }
+
+  function addInlineStudent() {
+    const name = toTitleCase(document.getElementById('search').value.trim());
+    if (!name) return;
+    const existing = new Set(state.rows.map(r => (r[0] || '').toLowerCase()));
+    if (existing.has(name.toLowerCase())) return;
+    const row = new Array(state.headers.length).fill('');
+    row[0] = name;
+    row[todayCol()] = 'P'; // mark present immediately
+    state.rows.push(row);
+    state.rows.sort((a, b) => sortKey(a[0] || '').localeCompare(sortKey(b[0] || '')));
+    saveState();
+    document.getElementById('search').value = '';
+    renderGrid();
+    showToast(`✓  ${name} — added and marked present`);
+  }
+
+  // ─── Add students panel ────────────────────────────────────────────────────
+  function submitNames() {
+    const raw = document.getElementById('names-input').value;
+    const names = raw.split('\n').map(n => n.trim()).filter(Boolean);
+    if (!names.length) return;
+
+    if (!state) {
+      state = { headers: ['Name', today()], rows: [] };
+    }
+
+    const existing = new Set(state.rows.map(r => (r[0] || '').toLowerCase()));
+    let added = 0;
+    names.forEach(name => {
+      if (!existing.has(name.toLowerCase())) {
+        const row = new Array(state.headers.length).fill('');
+        row[0] = name;
+        state.rows.push(row);
+        existing.add(name.toLowerCase());
+        added++;
+      }
+    });
+
+    saveState();
+    document.getElementById('names-input').value = '';
+    closePanel('panel-add');
+    showKiosk();
+    renderGrid();
+    showToast(`Added ${added} student${added !== 1 ? 's' : ''}`);
+  }
+
+  // ─── CSV import ────────────────────────────────────────────────────────────
+  async function triggerImport() {
+    // Use File System Access API when available — gives us a writable handle for auto-save
+    if (canAutoSave()) {
+      try {
+        [fileHandle] = await window.showOpenFilePicker({
+          types: [{ description: 'CSV Files', accept: { 'text/csv': ['.csv'] } }],
+          mode: 'readwrite',
+        });
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        applyImport(text, file.name);
+        saveHandleToIDB(fileHandle);
+        updateSaveIndicator();
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        // fall through to classic file input
+      }
+    }
+    document.getElementById('csv-import').click();
+  }
+
+  document.getElementById('csv-import').addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      // Use applyRefresh so the file is the source of truth (no merging)
+      const parsed = parseCSV(e.target.result);
+      if (!parsed.rows.length || parsed.rows.every(r => !r[0] || !r[0].trim())) {
+        state = { headers: ['Name', today()], rows: [] };
+        saveState(); showKiosk(); renderGrid();
+        showToast('New class started — students can add their own names');
+      } else {
+        applyRefresh(parsed, file.name);
+        showKiosk();
+      }
+    };
+    reader.readAsText(file);
+    this.value = '';
+  });
+
+  function applyImport(text, filename) {
+    try {
+      const parsed = parseCSV(text);
+      if (!parsed.rows.length || parsed.rows.every(r => !r[0] || !r[0].trim())) {
+        // Empty file — start a fresh class, students will add themselves
+        state = { headers: ['Name', today()], rows: [] };
+        saveState();
+        showKiosk();
+        renderGrid();
+        showToast(`New class started — students can add their own names`);
+        return;
+      }
+
+      state = parsed;
+      normaliseMarks();
+      ensureToday();
+      saveState();
+      showKiosk();
+      renderGrid();
+      showToast(`Imported ${parsed.rows.length} students from ${filename}`);
+    } catch {
+      alert('Could not read that CSV file. Make sure it has student names in the first column.');
+    }
+  }
+
+  function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) return { headers: [], rows: [] };
+    const headers = splitCSVLine(lines[0]);
+    const rows = lines.slice(1)
+      .filter(l => l.trim())
+      .map(l => splitCSVLine(l));
+    return { headers, rows };
+  }
+
+  function splitCSVLine(line) {
+    const result = [];
+    let field = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i+1] === '"') { field += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+      } else if (ch === ',' && !inQuotes) {
+        result.push(field.trim());
+        field = '';
+      } else {
+        field += ch;
+      }
+    }
+    result.push(field.trim());
+    return result;
+  }
+
+  // ─── CSV export ────────────────────────────────────────────────────────────
+  // Normalise all attendance values to uppercase P after loading from file
+  function normaliseMarks() {
+    state.rows.forEach(row => {
+      for (let i = 1; i < row.length; i++) {
+        row[i] = (row[i] || '').trim().toUpperCase();
+      }
+    });
+  }
+
+  function applyRefresh(parsed, filename) {
+    // Snapshot in-memory marks before replacing state
+    const todayStr = today();
+    const memMarks = {};
+    if (state) {
+      const col = state.headers.indexOf(todayStr);
+      if (col !== -1) {
+        state.rows.forEach(r => {
+          if (r[0] && (r[col] || '').toUpperCase() === 'P')
+            memMarks[r[0].trim().toLowerCase()] = true;
+        });
+      }
+    }
+
+    state = parsed;
+    normaliseMarks();
+    ensureToday();
+
+    // Merge: present if EITHER the file OR memory says present
+    const col = state.headers.indexOf(todayStr);
+    if (col !== -1) {
+      state.rows.forEach(r => {
+        if (r[0] && memMarks[r[0].trim().toLowerCase()])
+          r[col] = 'P';
+      });
+    }
+
+    saveState();
+    renderGrid();
+    showToast('Refreshed from ' + filename);
+  }
+
+  async function refreshFromFile() {
+    // Always open the file picker — guarantees a fresh read from disk.
+    // fileHandle.getFile() can return a cached snapshot and miss external edits.
+    if (canAutoSave()) {
+      try {
+        [fileHandle] = await window.showOpenFilePicker({
+          types: [{ description: 'CSV Files', accept: { 'text/csv': ['.csv'] } }],
+          mode: 'readwrite',
+        });
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        const parsed = parseCSV(text);
+        if (!parsed.headers.length) { showToast('CSV appears empty', 'warn'); return; }
+        saveHandleToIDB(fileHandle);
+        updateSaveIndicator();
+        applyRefresh(parsed, file.name);
+      } catch (e) {
+        if (e.name !== 'AbortError') showToast('Could not read file', 'warn');
+      }
+    } else {
+      // Firefox: use file input
+      document.getElementById('csv-import').click();
+    }
+  }
+
+  function exportCSV() {
+    if (!state) return;
+    const blob = new Blob([toCSVString()], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileHandle ? fileHandle.name : 'attendance.csv';
+    a.click();
+  }
+
+  // ─── Sheet panel ───────────────────────────────────────────────────────────
+  function renderSheet() {
+    const el = document.getElementById('sheet-content');
+    if (!state || !state.rows.length) {
+      el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:30px">No data yet.</p>';
+      return;
+    }
+
+    const sorted = [...state.rows]
+      .filter(r => r[0] && r[0].trim())
+      .sort((a, b) => sortKey(a[0] || '').localeCompare(sortKey(b[0] || '')));
+
+    let totalP = 0;
+    const ths = state.headers.map(h => `<th>${escHtml(h)}</th>`).join('');
+    const trs = sorted.map(row => {
+      const cells = state.headers.map((_, i) => {
+        if (i === 0) return `<td>${escHtml(row[i] || '')}</td>`;
+        const v = (row[i] || '').trim().toUpperCase();
+        if (v === 'P') { totalP++; return `<td><span class="p-badge">P</span></td>`; }
+        return `<td><span class="dash">—</span></td>`;
+      });
+      return `<tr>${cells.join('')}</tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="sheet-wrap">
+        <table>
+          <thead><tr>${ths}</tr></thead>
+          <tbody>${trs}</tbody>
+        </table>
+      </div>
+      <div class="sheet-summary">${sorted.length} students &nbsp;·&nbsp; <b>${totalP}</b> total attendances</div>
+    `;
+  }
+
+  // ─── Panel helpers ─────────────────────────────────────────────────────────
+  function openPanel(id) {
+    if (id === 'panel-sheet') renderSheet();
+    document.getElementById(id).classList.add('open');
+    if (id === 'panel-add') document.getElementById('names-input').focus();
+  }
+  function closePanel(id) {
+    document.getElementById(id).classList.remove('open');
+    if (id === 'panel-add') document.getElementById('names-input').value = '';
+  }
+  function overlayClick(e, id) {
+    if (e.target.id === id) closePanel(id);
+  }
+
+  // ─── Toast ─────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg, cls = '') {
+    clearTimeout(toastTimer);
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + cls;
+    toastTimer = setTimeout(() => { t.className = ''; }, 2400);
+  }
+
+  // ─── Utility ───────────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ─── Past sessions ─────────────────────────────────────────────────────────
+  let historyDateIndex = 0;
+
+  function pastDates() {
+    // All date columns except today, in order
+    return state.headers.slice(1).filter(h => h !== today());
+  }
+
+  function openHistory() {
+    const dates = pastDates();
+    if (!dates.length) {
+      showToast('No past sessions recorded yet', 'warn');
+      return;
+    }
+    historyDateIndex = dates.length - 1; // start at most recent past
+    renderHistory();
+    openPanel('panel-history');
+  }
+
+  function historyNav(dir) {
+    const dates = pastDates();
+    historyDateIndex = Math.max(0, Math.min(dates.length - 1, historyDateIndex + dir));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const dates = pastDates();
+    if (!dates.length) return;
+
+    const date = dates[historyDateIndex];
+    const col = state.headers.indexOf(date);
+    const sessionNum = historyDateIndex + 1;
+
+    document.getElementById('hist-date-label').innerHTML =
+      `${escHtml(date)}<span class="session-num">Session ${sessionNum} of ${dates.length}</span>`;
+    document.getElementById('hist-prev').disabled = historyDateIndex === 0;
+    document.getElementById('hist-next').disabled = historyDateIndex === dates.length - 1;
+
+    const present = [], absent = [];
+    state.rows
+      .filter(r => r[0] && r[0].trim())
+      .sort((a, b) => sortKey(a[0] || '').localeCompare(sortKey(b[0] || '')))
+      .forEach(r => {
+        const wasPresent = (r[col] || '').trim().toUpperCase() === 'P';
+        (wasPresent ? present : absent).push(r[0]);
+      });
+
+    const makeList = (names, cls) => {
+      if (!names.length) return `<div class="history-empty">None</div>`;
+      return names.map(n => `<div class="history-name">${escHtml(n)}</div>`).join('');
+    };
+
+    document.getElementById('hist-cols').innerHTML = `
+      <div class="history-col present-col">
+        <h3>Present (${present.length})</h3>
+        ${makeList(present, 'present')}
+      </div>
+      <div class="history-col absent-col">
+        <h3>Absent (${absent.length})</h3>
+        ${makeList(absent, 'absent')}
+      </div>
+    `;
+
+    const pct = state.rows.filter(r => r[0] && r[0].trim()).length;
+    document.getElementById('hist-summary').innerHTML =
+      pct ? `<b>${present.length}</b> of ${pct} students attended` : '';
+  }
+
+  // ─── CSV string ────────────────────────────────────────────────────────────
+  function toCSVString() {
+    return [state.headers, ...state.rows].map(row =>
+      row.map(c => /[,"\n]/.test(c) ? `"${String(c).replace(/"/g,'""')}"` : c).join(',')
+    ).join('\r\n');
+  }
+
+  // ─── File System Access API auto-save ──────────────────────────────────────
+  // Works in Chrome/Edge. File handle is persisted in IndexedDB so it survives
+  // page reloads — no need to re-link the file each session.
+  let fileHandle = null;
+
+  function canAutoSave() {
+    return typeof window.showOpenFilePicker === 'function';
+  }
+
+  // IndexedDB helpers to persist the file handle across reloads
+  function openIDB() {
+    return new Promise((res, rej) => {
+      const req = indexedDB.open('tafe_attendance', 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore('handles');
+      req.onsuccess = e => res(e.target.result);
+      req.onerror = rej;
+    });
+  }
+
+  async function saveHandleToIDB(handle) {
+    try {
+      const db = await openIDB();
+      const tx = db.transaction('handles', 'readwrite');
+      tx.objectStore('handles').put(handle, 'csv');
+      await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+    } catch {}
+  }
+
+  async function loadHandleFromIDB() {
+    try {
+      const db = await openIDB();
+      return await new Promise((res, rej) => {
+        const req = db.transaction('handles').objectStore('handles').get('csv');
+        req.onsuccess = e => res(e.target.result || null);
+        req.onerror = rej;
+      });
+    } catch { return null; }
+  }
+
+  async function clearHandleFromIDB() {
+    try {
+      const db = await openIDB();
+      const tx = db.transaction('handles', 'readwrite');
+      tx.objectStore('handles').delete('csv');
+    } catch {}
+  }
+
+  // Write the current state back to the linked CSV file
+  async function autoSave() {
+    if (!fileHandle || !state) return;
+    try {
+      const writable = await fileHandle.createWritable();
+      await writable.write(toCSVString());
+      await writable.close();
+    } catch {
+      fileHandle = null;
+      clearHandleFromIDB();
+      updateSaveIndicator();
+    }
+  }
+
+  // On page load, try to restore the file handle from IndexedDB
+  async function tryRestoreFileHandle() {
+    if (!canAutoSave()) return;
+    const handle = await loadHandleFromIDB();
+    if (!handle) return;
+
+    // Check if write permission is already granted (no user prompt needed)
+    const perm = await handle.queryPermission({ mode: 'readwrite' });
+    if (perm === 'granted') {
+      fileHandle = handle;
+      updateSaveIndicator();
+      // Write today's column immediately in case it was added since last save
+      autoSave();
+    } else {
+      // Permission needs a user gesture to re-grant — show a reconnect button
+      showReconnectPrompt(handle);
+    }
+  }
+
+  function showReconnectPrompt(handle) {
+    const el = document.getElementById('save-indicator');
+    if (!el) return;
+    el.textContent = '⚠ Reconnect ' + handle.name;
+    el.style.color = '#f59e0b';
+    el.title = 'Click to re-enable auto-save';
+    el.onclick = async () => {
+      const perm = await handle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        fileHandle = handle;
+        updateSaveIndicator();
+        el.onclick = () => { if (!fileHandle) triggerImport(); };
+        autoSave();
+        showToast('Auto-save reconnected');
+      }
+    };
+  }
+
+  function updateSaveIndicator() {
+    const el = document.getElementById('save-indicator');
+    if (!el) return;
+    el.onclick = triggerImport;
+    if (fileHandle) {
+      el.textContent = '● ' + fileHandle.name;
+      el.title = 'Click to change linked file';
+      el.style.color = 'var(--green-text)';
+    } else if (canAutoSave()) {
+      el.textContent = '○ Link CSV for auto-save';
+      el.style.color = 'var(--muted)';
+      el.title = 'Click to link a CSV file — changes will save automatically';
+    } else {
+      el.textContent = '';
+    }
+  }
+
+  // ─── Boot ──────────────────────────────────────────────────────────────────
+  state = loadState();
+  if (state) {
+    ensureToday();
+    showKiosk();
+    renderGrid();
+  } else {
+    showWelcome();
+  }
+  document.getElementById('sort-btn').textContent = sortBy === 'first' ? 'Sort: First name' : 'Sort: Last name';
+  updateSaveIndicator();
+  tryRestoreFileHandle(); // attempt to re-link the CSV file silently
+</script>
+</body>
+</html>

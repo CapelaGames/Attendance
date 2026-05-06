@@ -1,0 +1,13 @@
+# Data — don't commit real attendance records
+attendance.csv
+*.csv
+!example_attendance.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db

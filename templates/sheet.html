@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Sheet — TAFE NSW</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e8eaf0;
+      padding: 30px;
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    h1 { font-size: 1.4rem; color: #4f8ef7; }
+    .actions { display: flex; gap: 10px; align-items: center; }
+    .btn {
+      background: transparent;
+      border: 1px solid #2a2e3f;
+      color: #6b7280;
+      border-radius: 8px;
+      padding: 7px 13px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.15s, color 0.15s;
+      font-family: inherit;
+    }
+    .btn:hover { border-color: #4f8ef7; color: #4f8ef7; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid #2a2e3f;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th {
+      background: #1a1d27;
+      padding: 11px 16px;
+      text-align: center;
+      font-weight: 600;
+      color: #6b7280;
+      border-bottom: 1px solid #2a2e3f;
+      white-space: nowrap;
+    }
+    th:first-child { text-align: left; color: #e8eaf0; min-width: 180px; }
+    td {
+      padding: 11px 16px;
+      border-bottom: 1px solid #1a1d27;
+      text-align: center;
+      background: #0f1117;
+    }
+    tr:nth-child(even) td { background: #131620; }
+    tr:hover td { background: #1c2035; }
+    td:first-child { text-align: left; font-weight: 500; }
+
+    .p-badge {
+      display: inline-block;
+      background: #0a2118;
+      color: #5dde80;
+      border: 1px solid #2ea84a;
+      border-radius: 6px;
+      padding: 2px 9px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .dash { color: #2a2e3f; }
+
+    .summary {
+      margin-top: 14px;
+      font-size: 0.82rem;
+      color: #6b7280;
+    }
+    .summary b { color: #5dde80; }
+
+    .loading { text-align: center; padding: 60px; color: #6b7280; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Attendance Sheet</h1>
+  <div class="actions">
+    <button class="btn" onclick="exportCSV()">Export CSV</button>
+    <a href="/" class="btn">← Back to kiosk</a>
+  </div>
+</header>
+
+<div id="content" class="loading">Loading…</div>
+
+<script>
+  let sheetData = null;
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  async function init() {
+    sheetData = await fetch('/api/sheet').then(r => r.json());
+    render(sheetData);
+  }
+
+  function render({ headers, students }) {
+    const el = document.getElementById('content');
+    if (!students.length) {
+      el.innerHTML = '<p style="color:#6b7280;text-align:center;padding:40px">No students in the list yet.</p>';
+      return;
+    }
+
+    let totalP = 0;
+    let rows = students.map(row => {
+      const cells = headers.map((_, i) => {
+        if (i === 0) return `<td>${escHtml(row[i] || '')}</td>`;
+        const val = (row[i] || '').trim().toUpperCase();
+        if (val === 'P') { totalP++; return `<td><span class="p-badge">P</span></td>`; }
+        return `<td><span class="dash">—</span></td>`;
+      });
+      return `<tr>${cells.join('')}</tr>`;
+    }).join('');
+
+    const ths = headers.map((h, i) => `<th>${escHtml(h)}</th>`).join('');
+
+    el.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>${ths}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="summary">
+        ${students.length} students &nbsp;·&nbsp; <b>${totalP}</b> total attendances recorded
+      </div>
+    `;
+  }
+
+  function exportCSV() {
+    if (!sheetData) return;
+    const { headers, students } = sheetData;
+    const lines = [headers.join(',')];
+    students.forEach(row => {
+      lines.push(row.map(c => /[,"\n]/.test(c) ? `"${c.replace(/"/g,'""')}"` : c).join(','));
+    });
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'attendance.csv';
+    a.click();
+  }
+
+  init();
+</script>
+</body>
+</html>
