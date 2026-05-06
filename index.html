@@ -39,8 +39,8 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 48px 40px;
-      max-width: 460px;
+      padding: 44px 40px;
+      max-width: 560px;
       width: 100%;
       text-align: center;
     }
@@ -48,21 +48,21 @@
       font-size: 2rem;
       color: var(--accent);
       line-height: 1.2;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .welcome-box .tagline {
       color: var(--muted);
-      font-size: 0.95rem;
-      margin-bottom: 36px;
+      font-size: 0.9rem;
+      margin-bottom: 28px;
       line-height: 1.6;
     }
     .welcome-actions {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
     .btn-big {
-      padding: 16px 24px;
+      padding: 15px 24px;
       border-radius: 12px;
       font-size: 1rem;
       font-weight: 600;
@@ -83,6 +83,82 @@
       border-color: var(--border);
     }
     .btn-big.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Recent class cards ── */
+    .recent-section { margin-bottom: 22px; text-align: left; }
+    .recent-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .recent-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .class-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 13px 12px 11px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.12s, transform 0.1s;
+      position: relative;
+    }
+    .class-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .class-card-name { font-weight: 600; font-size: 0.88rem; margin-bottom: 4px; word-break: break-word; }
+    .class-card-meta { font-size: 0.72rem; color: var(--muted); }
+    .class-card-del {
+      position: absolute; top: 8px; right: 8px;
+      font-size: 0.7rem; color: var(--muted); cursor: pointer;
+      line-height: 1; padding: 2px 4px; border-radius: 4px;
+    }
+    .class-card-del:hover { color: var(--red); background: rgba(248,113,113,0.1); }
+    .welcome-divider {
+      border: none; border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    /* ── Class name button in header ── */
+    .class-name-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: border-color 0.12s;
+      font-family: inherit;
+      white-space: nowrap;
+      max-width: 200px;
+    }
+    .class-name-btn:hover { border-color: var(--accent); }
+    .class-name-btn .chevron { opacity: 0.45; font-size: 0.65rem; }
+
+    /* ── Text input shared style ── */
+    .text-input {
+      width: 100%;
+      padding: 13px 15px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 1rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .text-input:focus { border-color: var(--accent); }
 
     /* ────────────────────────────────── Kiosk screen */
     #screen-kiosk { display: none; }
@@ -354,9 +430,14 @@
   <div class="welcome-box">
     <h1>TAFE NSW<br>Attendance</h1>
     <p class="tagline">Set up your class list once,<br>then students tap their name each session.</p>
+    <div id="recent-section" class="recent-section" style="display:none">
+      <div class="recent-label">Recent classes</div>
+      <div class="recent-grid" id="recent-classes-grid"></div>
+      <hr class="welcome-divider">
+    </div>
     <div class="welcome-actions">
-      <button class="btn-big primary" onclick="openPanel('panel-add')">Add student names</button>
-      <button class="btn-big secondary" onclick="triggerImport()">Import existing CSV file</button>
+      <button class="btn-big primary" onclick="openNewClassPanel()">+ Create new class</button>
+      <button class="btn-big secondary" onclick="triggerImport()">Open existing CSV file</button>
     </div>
   </div>
 </div>
@@ -368,6 +449,10 @@
       <h1>TAFE NSW — Attendance</h1>
       <div class="sub">Tap your name to mark yourself present</div>
     </div>
+    <button class="class-name-btn" id="class-name-btn" onclick="openClassSwitcher()" title="Switch class">
+      <span id="class-name-label">Class</span>
+      <span class="chevron">▼</span>
+    </button>
     <div class="header-right">
       <div class="date-pill" id="date-display">—</div>
       <button class="btn" id="sort-btn" onclick="toggleSort()" title="Change sort order">Sort: First name</button>
@@ -436,6 +521,36 @@
     </div>
     <div class="history-cols" id="hist-cols"></div>
     <div class="history-summary" id="hist-summary"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ NEW CLASS PANEL ══════════════════════════ -->
+<div class="overlay" id="panel-new-class" onclick="overlayClick(event, 'panel-new-class')">
+  <div class="panel">
+    <h2>Create new class</h2>
+    <p class="hint">Enter a name for your class. You'll be asked where to save its CSV file.</p>
+    <input type="text" id="new-class-name" class="text-input" placeholder="e.g. Certificate III IT — Room 4"
+           onkeydown="if(event.key==='Enter')confirmNewClass()">
+    <div class="panel-actions">
+      <button class="btn" onclick="closePanel('panel-new-class')">Cancel</button>
+      <button class="btn accent" onclick="confirmNewClass()">Create &amp; save file…</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ SWITCH CLASS PANEL ══════════════════════════ -->
+<div class="overlay" id="panel-switch-class" onclick="overlayClick(event, 'panel-switch-class')">
+  <div class="panel" style="max-width:540px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <h2 style="margin:0">Switch class</h2>
+      <button class="btn" onclick="closePanel('panel-switch-class')">Close</button>
+    </div>
+    <div id="switch-class-grid" class="recent-grid"></div>
+    <hr class="welcome-divider">
+    <div class="welcome-actions">
+      <button class="btn-big primary" onclick="closePanel('panel-switch-class');openNewClassPanel()">+ Create new class</button>
+      <button class="btn-big secondary" onclick="closePanel('panel-switch-class');triggerImport()">Open existing CSV file</button>
+    </div>
   </div>
 </div>
 
@@ -706,6 +821,9 @@
         const text = await file.text();
         applyImport(text, file.name);
         saveHandleToIDB(fileHandle);
+        const importedName = currentClassName || filenameToClassName(file.name);
+        saveClassRecord(fileHandle, importedName);
+        setCurrentClass(importedName, fileHandle.name);
         updateSaveIndicator();
         return;
       } catch (e) {
@@ -753,6 +871,11 @@
       normaliseMarks();
       ensureToday();
       saveState();
+      if (fileHandle) {
+        const name = currentClassName || filenameToClassName(filename);
+        saveClassRecord(fileHandle, name);
+        setCurrentClass(name, fileHandle.name);
+      }
       showKiosk();
       renderGrid();
       showToast(`Imported ${parsed.rows.length} students from ${filename}`);
@@ -829,6 +952,11 @@
     }
 
     saveState();
+    if (fileHandle) {
+      const name = currentClassName || filenameToClassName(filename);
+      saveClassRecord(fileHandle, name);
+      setCurrentClass(name, fileHandle.name);
+    }
     renderGrid();
     showToast('Refreshed from ' + filename);
   }
@@ -907,6 +1035,7 @@
     if (id === 'panel-sheet') renderSheet();
     document.getElementById(id).classList.add('open');
     if (id === 'panel-add') document.getElementById('names-input').focus();
+    if (id === 'panel-new-class') document.getElementById('new-class-name').focus();
   }
   function closePanel(id) {
     document.getElementById(id).classList.remove('open');
@@ -1018,10 +1147,15 @@
   }
 
   // IndexedDB helpers to persist the file handle across reloads
+  // v2: handles keyed by filename; classes store for recent-class list
   function openIDB() {
     return new Promise((res, rej) => {
-      const req = indexedDB.open('tafe_attendance', 1);
-      req.onupgradeneeded = e => e.target.result.createObjectStore('handles');
+      const req = indexedDB.open('tafe_attendance', 2);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('handles')) db.createObjectStore('handles');
+        if (!db.objectStoreNames.contains('classes')) db.createObjectStore('classes', { keyPath: 'id' });
+      };
       req.onsuccess = e => res(e.target.result);
       req.onerror = rej;
     });
@@ -1031,27 +1165,81 @@
     try {
       const db = await openIDB();
       const tx = db.transaction('handles', 'readwrite');
-      tx.objectStore('handles').put(handle, 'csv');
+      tx.objectStore('handles').put(handle, handle.name);
       await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
     } catch {}
   }
 
-  async function loadHandleFromIDB() {
+  async function loadHandleFromIDB(filename) {
     try {
       const db = await openIDB();
       return await new Promise((res, rej) => {
-        const req = db.transaction('handles').objectStore('handles').get('csv');
+        // Fall back to old v1 key 'csv' if no filename given
+        const req = db.transaction('handles').objectStore('handles').get(filename || 'csv');
         req.onsuccess = e => res(e.target.result || null);
         req.onerror = rej;
       });
     } catch { return null; }
   }
 
-  async function clearHandleFromIDB() {
+  async function clearHandleFromIDB(filename) {
     try {
       const db = await openIDB();
       const tx = db.transaction('handles', 'readwrite');
-      tx.objectStore('handles').delete('csv');
+      tx.objectStore('handles').delete(filename || 'csv');
+    } catch {}
+  }
+
+  // ─── Class records ──────────────────────────────────────────────────────────
+  function filenameToClassName(filename) {
+    return (filename || '').replace(/\.csv$/i, '').replace(/[-_]+/g, ' ').trim();
+  }
+
+  let currentClassName = localStorage.getItem('tafe_class_name') || '';
+
+  function setCurrentClass(name, filename) {
+    currentClassName = name;
+    localStorage.setItem('tafe_class_name', name || '');
+    localStorage.setItem('tafe_class_file', filename || '');
+    const label = document.getElementById('class-name-label');
+    if (label) label.textContent = name || (filename ? filenameToClassName(filename) : 'Class');
+  }
+
+  async function saveClassRecord(handle, name) {
+    if (!handle) return;
+    try {
+      const db = await openIDB();
+      const record = {
+        id: handle.name,
+        name: name || filenameToClassName(handle.name),
+        filename: handle.name,
+        lastUsed: Date.now(),
+      };
+      const tx = db.transaction('classes', 'readwrite');
+      tx.objectStore('classes').put(record);
+      await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+    } catch {}
+  }
+
+  async function getClassRecords() {
+    try {
+      const db = await openIDB();
+      const records = await new Promise((res, rej) => {
+        const req = db.transaction('classes').objectStore('classes').getAll();
+        req.onsuccess = e => res(e.target.result || []);
+        req.onerror = rej;
+      });
+      return records.sort((a, b) => b.lastUsed - a.lastUsed);
+    } catch { return []; }
+  }
+
+  async function deleteClassRecord(id) {
+    try {
+      const db = await openIDB();
+      const tx = db.transaction(['classes', 'handles'], 'readwrite');
+      tx.objectStore('classes').delete(id);
+      tx.objectStore('handles').delete(id);
+      await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
     } catch {}
   }
 
@@ -1063,8 +1251,9 @@
       await writable.write(toCSVString());
       await writable.close();
     } catch {
+      const name = fileHandle ? fileHandle.name : null;
       fileHandle = null;
-      clearHandleFromIDB();
+      clearHandleFromIDB(name);
       updateSaveIndicator();
     }
   }
@@ -1072,7 +1261,8 @@
   // On page load, try to restore the file handle from IndexedDB
   async function tryRestoreFileHandle() {
     if (!canAutoSave()) return;
-    const handle = await loadHandleFromIDB();
+    const filename = localStorage.getItem('tafe_class_file');
+    const handle = await loadHandleFromIDB(filename);
     if (!handle) return;
 
     // Check if write permission is already granted (no user prompt needed)
@@ -1123,14 +1313,155 @@
     }
   }
 
+  // ─── Class management ──────────────────────────────────────────────────────
+  function makeClassCards(records, onClickFn, onDeleteFn) {
+    return records.map(r => {
+      const id = JSON.stringify(r.id);
+      return `
+        <div class="class-card" onclick="${onClickFn}(${id})">
+          <span class="class-card-del" onclick="event.stopPropagation();${onDeleteFn}(${id},this.parentElement)" title="Remove from list">✕</span>
+          <div class="class-card-name">${escHtml(r.name)}</div>
+          <div class="class-card-meta">${escHtml(r.filename)}</div>
+        </div>`;
+    }).join('');
+  }
+
+  async function renderWelcome() {
+    document.getElementById('screen-welcome').style.display = 'flex';
+    document.getElementById('screen-kiosk').style.display = 'none';
+    const records = await getClassRecords();
+    const section = document.getElementById('recent-section');
+    const grid = document.getElementById('recent-classes-grid');
+    if (records.length) {
+      grid.innerHTML = makeClassCards(records, 'switchToClass', 'removeWelcomeCard');
+      section.style.display = 'block';
+    } else {
+      section.style.display = 'none';
+    }
+  }
+
+  async function removeWelcomeCard(id, cardEl) {
+    await deleteClassRecord(id);
+    cardEl.remove();
+    const grid = document.getElementById('recent-classes-grid');
+    if (!grid.children.length) document.getElementById('recent-section').style.display = 'none';
+  }
+
+  async function openClassSwitcher() {
+    const records = await getClassRecords();
+    const grid = document.getElementById('switch-class-grid');
+    if (records.length) {
+      grid.innerHTML = makeClassCards(records, 'switchToClassFromPanel', 'removeSwitcherCard');
+    } else {
+      grid.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;margin-bottom:12px">No saved classes yet.</p>';
+    }
+    openPanel('panel-switch-class');
+  }
+
+  async function switchToClassFromPanel(id) {
+    closePanel('panel-switch-class');
+    await switchToClass(id);
+  }
+
+  async function removeSwitcherCard(id, cardEl) {
+    await deleteClassRecord(id);
+    cardEl.remove();
+  }
+
+  function openNewClassPanel() {
+    openPanel('panel-new-class');
+    setTimeout(() => document.getElementById('new-class-name').focus(), 50);
+  }
+
+  async function confirmNewClass() {
+    const name = document.getElementById('new-class-name').value.trim();
+
+    if (!canAutoSave()) {
+      // Firefox/Safari: start an in-memory class without a file
+      state = { headers: ['Name', today()], rows: [] };
+      saveState();
+      if (name) setCurrentClass(name, '');
+      closePanel('panel-new-class');
+      document.getElementById('new-class-name').value = '';
+      showKiosk();
+      renderGrid();
+      showToast('New class started');
+      return;
+    }
+
+    const suggested = (name || 'attendance').replace(/[^a-z0-9\s\-]/gi, '_');
+    try {
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName: suggested + '.csv',
+        types: [{ description: 'CSV Files', accept: { 'text/csv': ['.csv'] } }],
+      });
+      state = { headers: ['Name', today()], rows: [] };
+      saveState(); // writes to localStorage + triggers autoSave (creates the file)
+      await saveHandleToIDB(fileHandle);
+      const displayName = name || filenameToClassName(fileHandle.name);
+      await saveClassRecord(fileHandle, displayName);
+      setCurrentClass(displayName, fileHandle.name);
+      updateSaveIndicator();
+      closePanel('panel-new-class');
+      document.getElementById('new-class-name').value = '';
+      showKiosk();
+      renderGrid();
+      showToast('Class created — students can add their names');
+    } catch (e) {
+      if (e.name !== 'AbortError') showToast('Could not create file', 'warn');
+    }
+  }
+
+  async function switchToClass(id) {
+    if (canAutoSave()) {
+      const handle = await loadHandleFromIDB(id);
+      if (handle) {
+        let perm = await handle.queryPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') perm = await handle.requestPermission({ mode: 'readwrite' });
+        if (perm === 'granted') {
+          const file = await handle.getFile();
+          const text = await file.text();
+          const parsed = parseCSV(text);
+          const records = await getClassRecords();
+          const record = records.find(r => r.id === id);
+          const name = record ? record.name : filenameToClassName(id);
+          fileHandle = handle;
+          if (!parsed.rows.length || parsed.rows.every(r => !r[0] || !r[0].trim())) {
+            state = { headers: ['Name', today()], rows: [] };
+            saveState();
+          } else {
+            applyRefresh(parsed, file.name); // saves state, sets currentClass
+            showKiosk();
+            return;
+          }
+          await saveHandleToIDB(fileHandle);
+          await saveClassRecord(fileHandle, name);
+          setCurrentClass(name, fileHandle.name);
+          updateSaveIndicator();
+          showKiosk();
+          renderGrid();
+          showToast('Switched to ' + name);
+          return;
+        }
+      }
+    }
+    // No handle or permission denied — ask user to locate the file manually
+    showToast('Please locate the file to switch classes', 'warn');
+    triggerImport();
+  }
+
   // ─── Boot ──────────────────────────────────────────────────────────────────
   state = loadState();
+  currentClassName = localStorage.getItem('tafe_class_name') || '';
   if (state) {
     ensureToday();
+    const storedName = localStorage.getItem('tafe_class_name') || '';
+    const storedFile = localStorage.getItem('tafe_class_file') || '';
+    setCurrentClass(storedName, storedFile);
     showKiosk();
     renderGrid();
   } else {
-    showWelcome();
+    renderWelcome();
   }
   document.getElementById('sort-btn').textContent = sortBy === 'first' ? 'Sort: First name' : 'Sort: Last name';
   updateSaveIndicator();
