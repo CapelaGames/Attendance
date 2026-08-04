@@ -152,28 +152,67 @@
     return 'ok';
   }
 
+  /* PeopleSoft redraws a row when its attendance changes — that's where the
+     Participated dropdown comes from. Setting the whole class in a tight loop
+     therefore loses every change after the first, so go one at a time and wait
+     for the page to settle in between. */
+  function isBusy(doc) {
+    var el = doc.getElementById('WAIT_win0') || doc.getElementById('processing');
+    if (!el) { return false; }
+    if (el.style && el.style.display === 'none') { return false; }
+    return (el.offsetWidth > 0 || el.offsetHeight > 0);
+  }
+
+  function banner(doc) {
+    var el = doc.createElement('div');
+    el.style.cssText = 'position:fixed;top:14px;right:14px;z-index:2147483647;' +
+      'background:#1a1a1a;color:#fff;font:13px system-ui,sans-serif;padding:10px 16px;' +
+      'border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.35);';
+    (doc.body || doc.documentElement).appendChild(el);
+    return el;
+  }
+
   function apply(doc, rows, emplids, day, note) {
-    var byId = {};
-    for (var i = 0; i < rows.length; i++) { byId[rows[i].emplid] = rows[i].row; }
-    var marked = 0, already = 0, missing = [], failed = [];
-    for (var k = 0; k < emplids.length; k++) {
-      var id = String(emplids[k]);
-      if (byId[id] === undefined) { missing.push(id); continue; }
-      var res = mark(doc, byId[id]);
+    var byId = {}, i;
+    for (i = 0; i < rows.length; i++) { byId[rows[i].emplid] = rows[i].row; }
+
+    var queue = [], missing = [];
+    for (i = 0; i < emplids.length; i++) {
+      var id = String(emplids[i]);
+      if (byId[id] === undefined) { missing.push(id); } else { queue.push([id, byId[id]]); }
+    }
+
+    var marked = 0, already = 0, failed = [], at = 0, waits = 0;
+    var tag = banner(doc);
+
+    function finish() {
+      if (tag.parentNode) { tag.parentNode.removeChild(tag); }
+      var msg = 'Marked ' + marked + ' present for ' + day +
+        ' (' + rows.length + ' students on this roster).';
+      if (already) { msg += '\n' + already + ' were already marked.'; }
+      if (missing.length) { msg += '\n\nNot on this roster: ' + missing.join(', '); }
+      if (failed.length) {
+        msg += '\n\nCould not set ' + failed.length + ' row(s). First: ' + failed[0];
+      }
+      if (note) { msg += '\n\n' + note; }
+      msg += '\n\nCheck the grid, then click Save yourself.';
+      alert(msg);
+    }
+
+    function step() {
+      if (at >= queue.length) { finish(); return; }
+      if (isBusy(doc) && waits < 80) { waits++; window.setTimeout(step, 250); return; }
+      waits = 0;
+      tag.textContent = 'Marking ' + (at + 1) + ' of ' + queue.length + '…';
+      var entry = queue[at++];
+      var res = mark(doc, entry[1]);
       if (res === 'ok') { marked++; }
       else if (res === 'already') { already++; }
-      else { failed.push(id + ' (' + res + ')'); }
+      else { failed.push(entry[0] + ' (' + res + ')'); }
+      window.setTimeout(step, 450);
     }
-    var msg = 'Marked ' + marked + ' present for ' + day +
-      ' (' + rows.length + ' students on this roster).';
-    if (already) { msg += '\n' + already + ' were already marked.'; }
-    if (missing.length) { msg += '\n\nNot on this roster: ' + missing.join(', '); }
-    if (failed.length) {
-      msg += '\n\nCould not set ' + failed.length + ' row(s). First: ' + failed[0];
-    }
-    if (note) { msg += '\n\n' + note; }
-    msg += '\n\nCheck the grid, then click Save yourself.';
-    alert(msg);
+
+    step();
   }
 
   function noteFrom(msg) {
