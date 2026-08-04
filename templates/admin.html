@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Admin — Attendance{% endblock %}
+{% block body %}
+<header>
+  <div class="brand">
+    <h1>Admin</h1>
+    <div class="sub">{{ rows|length }} account{{ '' if rows|length == 1 else 's' }}</div>
+  </div>
+  <div class="header-right">
+    <a href="{{ url_for('dashboard') }}" class="btn">← Your classes</a>
+    <form method="post" action="{{ url_for('logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn">Sign out</button>
+    </form>
+  </div>
+</header>
+
+<div class="flash-wrap">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+</div>
+
+<div class="container">
+  {% for row in rows %}
+    {% set t = row.teacher %}
+    <div class="card-panel" style="margin-bottom: 14px;">
+      <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:baseline; justify-content:space-between;">
+        <div>
+          <b style="font-size: 1rem;">{{ t.email }}</b>
+          {% if t.is_admin %}
+            <span style="font-size:.72rem; background:var(--accent,#2d6cdf); color:#fff;
+                         padding:2px 8px; border-radius:99px; margin-left:6px;">admin</span>
+          {% endif %}
+          {% if t.id == current_user.id %}
+            <span style="font-size:.72rem; color:var(--muted); margin-left:4px;">(you)</span>
+          {% endif %}
+          <div style="color:var(--muted); font-size:.82rem; margin-top:4px;">
+            joined {{ t.created_at.strftime('%d %b %Y') }} ·
+            {{ row.classes }} class{{ '' if row.classes == 1 else 'es' }} ·
+            {{ row.students }} student{{ '' if row.students == 1 else 's' }} ·
+            PeopleSoft upload
+            <b style="color: {{ 'var(--green,#2e7d32)' if t.ps_upload_enabled else 'var(--red,#c62828)' }};">
+              {{ 'enabled' if t.ps_upload_enabled else 'disabled' }}</b>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <form method="post" action="{{ url_for('admin_toggle_peoplesoft', teacher_id=t.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn">{{ 'Disable' if t.ps_upload_enabled else 'Enable' }} PeopleSoft</button>
+          </form>
+          <form method="post" action="{{ url_for('admin_toggle_admin', teacher_id=t.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn">{{ 'Remove admin' if t.is_admin else 'Make admin' }}</button>
+          </form>
+        </div>
+      </div>
+
+      {% if t.id != current_user.id %}
+        <details style="margin-top: 14px;">
+          <summary style="cursor:pointer; color:var(--red,#c62828); font-size:.85rem;">
+            Delete this account
+          </summary>
+          <p style="color:var(--muted); font-size:.82rem; margin:10px 0;">
+            This permanently deletes {{ t.email }}, their {{ row.classes }}
+            class{{ '' if row.classes == 1 else 'es' }}, {{ row.students }} student
+            record{{ '' if row.students == 1 else 's' }}, and all attendance history.
+            This cannot be undone. Type the email to confirm.
+          </p>
+          <form method="post" action="{{ url_for('admin_delete_teacher', teacher_id=t.id) }}"
+                style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="confirm" placeholder="{{ t.email }}" autocomplete="off"
+                   style="flex:1; min-width:220px;">
+            <button class="btn" style="background:var(--red,#c62828); color:#fff;">Delete permanently</button>
+          </form>
+        </details>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <div class="card-panel" style="margin-top: 18px;">
+    <h2 style="font-size: 1rem; margin-bottom: 12px;">Admin access</h2>
+    <p style="color: var(--muted); font-size: .88rem;">
+      {% if admin_email %}
+        <code>{{ admin_email }}</code> is set as <code>ADMIN_EMAIL</code> and is granted admin
+        on every deploy, so it can't be locked out. Others can be promoted here.
+      {% else %}
+        No <code>ADMIN_EMAIL</code> is set. Set one with
+        <code>fly secrets set ADMIN_EMAIL=you@example.com</code> so admin access can always
+        be recovered if it's removed here.
+      {% endif %}
+    </p>
+  </div>
+</div>
+{% endblock %}

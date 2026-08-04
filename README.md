@@ -14,6 +14,44 @@ accounts needed. Data is stored in Postgres, with CSV export.
 - Teachers see live attendance, a **full sheet**, and can **export CSV**.
 - Teachers can **close** self check-in or **regenerate** the QR link at any time.
 
+## Admin
+
+Set `ADMIN_EMAIL` to your own address and that account becomes an admin on every boot, so
+admin access can't be locked out by accident. Admins get an **Admin** button on the
+dashboard, leading to `/admin`, where you can:
+
+- see every account with its join date, class and student counts, and PeopleSoft status
+- **enable or disable PeopleSoft upload** per teacher — disabling hides the bookmarklet page
+  *and* makes any already-installed bookmark stop working, since the API checks too
+- promote or demote other admins
+- **delete an account**, which permanently removes its classes, students, and attendance
+
+Deletion asks you to retype the account's email, and you can't delete yourself or drop your
+own admin rights.
+
+## Pushing attendance into PeopleSoft
+
+Each class has a **PeopleSoft** page (`/classes/<id>/sync`) offering a bookmarklet. Drag it
+to your bookmarks bar — it needs no add-on and no admin rights, so it works on TAFE SOE
+machines where extensions can't be installed.
+
+Open a class roster in PeopleSoft, click the bookmark, and it ticks everyone this app has
+marked present for that meeting's date, then reports what it did. **It never clicks Save** —
+you review the grid and submit yourself.
+
+Students are matched by PeopleSoft EMPLID, not by name. IDs are learned automatically the
+first time you run the bookmark on a roster: it reads `RX_AT_ROST_GRID_EMPLID` from the grid
+and pairs each one with a student whose name or alias matches exactly (handling PeopleSoft's
+`Surname,Given` form). Anyone still unmatched is listed on the sync page — fix them with a
+rename or an alias. An EMPLID is never silently overwritten; mismatches are reported as
+conflicts.
+
+If the TAFE page's content security policy blocks the call back to this app, the bookmarklet
+falls back to prompting you to paste the ID list.
+
+The sync link carries a per-class secret (`Klass.sync_token`, separate from the student QR
+token) and can read student IDs, so don't leave it on a shared machine's bookmarks bar.
+
 ## Run locally (no database setup)
 
 Without a `DATABASE_URL`, the app uses a local SQLite file, so you can run it with nothing
@@ -30,6 +68,7 @@ SIGNUP_CODE=test SECRET_KEY=dev python app.py
 | Variable       | Purpose                                                        |
 |----------------|----------------------------------------------------------------|
 | `SIGNUP_CODE`  | The code new teachers must enter to register. **Required.**    |
+| `ADMIN_EMAIL`  | Account granted admin on every boot. See **Admin** above.      |
 | `SECRET_KEY`   | Secret for signing session cookies. Use a long random string.  |
 | `DATABASE_URL` | Postgres URL. If unset, falls back to local SQLite.            |
 | `PORT`         | Port for local dev (default 8080). Ignored under gunicorn.     |
@@ -74,7 +113,10 @@ DNS records it prints.
 ## Files
 
 - `app.py` — Flask app (models + routes).
-- `templates/` — pages (`base`, `login`, `signup`, `dashboard`, `class`, `mark`, `share`, `sheet`).
+- `templates/` — pages (`base`, `login`, `signup`, `dashboard`, `class`, `mark`, `share`,
+  `sheet`, `sync`, `sync_disabled`, `admin`).
 - `static/kiosk.js` — the shared tap-to-mark grid used by the teacher and student pages.
+- `static/ps_sync.js` — source for the PeopleSoft bookmarklet; inlined into a `javascript:`
+  URL at serve time (it can't be loaded remotely — the TAFE page's CSP would block it).
 - `Dockerfile`, `fly.toml`, `requirements.txt` — deployment.
 - `index.html` — the original standalone offline version (localStorage), kept for reference.

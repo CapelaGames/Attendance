@@ -7,6 +7,9 @@
     <div class="sub">Signed in as {{ current_user.email }}</div>
   </div>
   <div class="header-right">
+    {% if current_user.is_admin %}
+      <a href="{{ url_for('admin_page') }}" class="btn">Admin</a>
+    {% endif %}
     <form method="post" action="{{ url_for('logout') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn">Sign out</button>

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}PeopleSoft upload disabled{% endblock %}
+{% block body %}
+<header>
+  <div class="brand">
+    <h1>{{ klass.name }}</h1>
+    <div class="sub">PeopleSoft upload</div>
+  </div>
+  <div class="header-right">
+    <a href="{{ url_for('view_class', class_id=klass.id) }}" class="btn">← Back to class</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card-panel">
+    <h2 style="font-size: 1rem; margin-bottom: 12px;">Turned off for your account</h2>
+    <p style="color: var(--muted); font-size: .88rem;">
+      An administrator has disabled PeopleSoft upload for this account, so the bookmarklet
+      is unavailable and any copy you already installed will stop working. Everything else —
+      check-in, the roster, and CSV export — is unaffected.
+    </p>
+  </div>
+</div>
+{% endblock %}

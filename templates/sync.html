@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}PeopleSoft sync — {{ klass.name }}{% endblock %}
+{% block body %}
+<header>
+  <div class="brand">
+    <h1>{{ klass.name }}</h1>
+    <div class="sub">Push attendance into PeopleSoft</div>
+  </div>
+  <div class="header-right">
+    <a href="{{ url_for('view_class', class_id=klass.id) }}" class="btn">← Back to class</a>
+  </div>
+</header>
+
+<div class="flash-wrap">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+</div>
+
+<div class="container">
+  <div class="card-panel">
+    <h2 style="font-size: 1rem; margin-bottom: 12px;">1. Install the bookmark</h2>
+    <p style="color: var(--muted); font-size: .88rem;">
+      Drag this button onto your bookmarks bar. It needs no add-ons or admin rights, so it
+      works on TAFE machines. Press <b>Ctrl+Shift+B</b> if the bar is hidden.
+    </p>
+    <p style="margin: 18px 0;">
+      <a href="{{ bookmarklet }}" class="btn primary"
+         onclick="alert('Drag this to your bookmarks bar rather than clicking it here.'); return false;"
+         style="text-decoration:none;">Attendance → PeopleSoft</a>
+    </p>
+    <p style="color: var(--muted); font-size: .82rem;">
+      On a locked-down machine you can instead add a bookmark by hand and paste the code
+      below as its address.
+    </p>
+    <textarea readonly rows="3" onclick="this.select()"
+              style="width:100%; font-family:monospace; font-size:.7rem;">{{ bookmarklet }}</textarea>
+  </div>
+
+  <div class="card-panel" style="margin-top: 18px;">
+    <h2 style="font-size: 1rem; margin-bottom: 12px;">2. Use it</h2>
+    <ol style="color: var(--muted); font-size: .88rem; line-height: 1.7; padding-left: 20px;">
+      <li>Open the class roster in PeopleSoft for the date you want.</li>
+      <li>Click the <b>Attendance → PeopleSoft</b> bookmark.</li>
+      <li>It ticks everyone this app has marked present, then tells you what it did.</li>
+      <li><b>Check the grid, then click Save yourself.</b></li>
+    </ol>
+    <p style="color: var(--muted); font-size: .82rem;">
+      The bookmark never saves for you — attendance feeds funding and progress reporting,
+      so the submission stays your call. It reads the meeting date straight off the roster.
+    </p>
+  </div>
+
+  <div class="card-panel" style="margin-top: 18px;">
+    <h2 style="font-size: 1rem; margin-bottom: 12px;">Student ID matching</h2>
+    {% if missing %}
+      <p style="color: var(--muted); font-size: .88rem;">
+        {{ missing|length }} student{{ '' if missing|length == 1 else 's' }} have no PeopleSoft
+        ID yet. IDs are learned automatically the first time you run the bookmark on a roster —
+        anyone still listed after that has a name here that doesn't match PeopleSoft exactly.
+        Fix those with <b>Rename</b> or an alias on the manage page.
+      </p>
+      <p style="font-size: .85rem; margin-top: 10px;">{{ missing|join(', ') }}</p>
+    {% else %}
+      <p style="color: var(--muted); font-size: .88rem;">
+        Every student has a PeopleSoft ID. Matching is by ID, not by name.
+      </p>
+    {% endif %}
+  </div>
+
+  <div class="card-panel" style="margin-top: 18px;">
+    <h2 style="font-size: 1rem; margin-bottom: 12px;">Keep this link private</h2>
+    <p style="color: var(--muted); font-size: .88rem;">
+      The bookmark contains a secret token for this class and can read your students'
+      PeopleSoft IDs. Don't share it or leave it on a shared computer's bookmarks bar.
+    </p>
+  </div>
+</div>
+{% endblock %}

@@ -14,6 +14,9 @@ import io
 import os
 import secrets
 from datetime import date, datetime
+from functools import wraps
+from pathlib import Path
+from urllib.parse import quote
 
 from flask import (
     Flask, Response, abort, flash, g, redirect, render_template,
@@ -27,7 +30,7 @@ from flask_wtf import CSRFProtect
 import segno
 from sqlalchemy import (
     Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint,
-    create_engine, event, select,
+    create_engine, event, inspect as sa_inspect, select, text,
 )
 from sqlalchemy.orm import (
     DeclarativeBase, Mapped, mapped_column, relationship, scoped_session,
@@ -51,6 +54,7 @@ def database_url() -> str:
 
 
 SIGNUP_CODE = os.environ.get('SIGNUP_CODE', '')
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', '').strip().lower()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-insecure-change-me')
@@ -93,6 +97,8 @@ class Teacher(Base, UserMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ps_upload_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     classes: Mapped[list['Klass']] = relationship(
         back_populates='teacher', cascade='all, delete-orphan')
@@ -104,6 +110,9 @@ class Klass(Base):
     teacher_id: Mapped[int] = mapped_column(ForeignKey('teacher.id'), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     public_token: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    # Separate from public_token: the QR link is handed to students, but the sync
+    # endpoints expose student IDs, so they get their own secret.
+    sync_token: Mapped[str | None] = mapped_column(String(32), unique=True)
     self_mark_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     teacher: Mapped[Teacher] = relationship(back_populates='classes')
@@ -118,6 +127,7 @@ class Student(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     class_id: Mapped[int] = mapped_column(ForeignKey('klass.id'), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    emplid: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     klass: Mapped[Klass] = relationship(back_populates='students')
     attendance: Mapped[list['Attendance']] = relationship(
@@ -157,6 +167,36 @@ class PendingCheckin(Base):
 
 
 Base.metadata.create_all(engine)
+
+
+def add_missing_columns() -> None:
+    """create_all() only creates missing tables, never alters existing ones."""
+    added = {'klass': [('sync_token', 'VARCHAR(32)')],
+             'student': [('emplid', 'VARCHAR(20)')],
+             'teacher': [('is_admin', 'BOOLEAN DEFAULT 0 NOT NULL'),
+                         ('ps_upload_enabled', 'BOOLEAN DEFAULT 1 NOT NULL')]}
+    insp = sa_inspect(engine)
+    with engine.begin() as conn:
+        for table, columns in added.items():
+            if not insp.has_table(table):
+                continue
+            existing = {c['name'] for c in insp.get_columns(table)}
+            for name, ddl in columns:
+                if name not in existing:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))
+
+
+def grant_admin_from_env() -> None:
+    """ADMIN_EMAIL is how the first admin gets made — there's no bootstrap UI."""
+    if not ADMIN_EMAIL:
+        return
+    with engine.begin() as conn:
+        conn.execute(text('UPDATE teacher SET is_admin = :yes WHERE lower(email) = :email'),
+                     {'yes': True, 'email': ADMIN_EMAIL})
+
+
+add_missing_columns()
+grant_admin_from_env()
 
 
 @app.teardown_appcontext
@@ -254,6 +294,61 @@ def find_student(klass: Klass, typed: str) -> Student | None:
         if any(a.name.strip().lower() == key for a in s.aliases):
             return s
     return None
+
+
+def flip_name(typed: str) -> str:
+    """PeopleSoft renders names as 'Surname,Given' — flip to match our stored form."""
+    if ',' not in typed:
+        return typed
+    surname, _, given = typed.partition(',')
+    return f'{given.strip()} {surname.strip()}'.strip()
+
+
+def name_index(klass: Klass) -> dict[str, Student]:
+    """Every name and alias in the class, lowercased, for exact lookup."""
+    index: dict[str, Student] = {}
+    for s in klass.students:
+        index.setdefault(s.name.strip().lower(), s)
+        for a in s.aliases:
+            index.setdefault(a.name.strip().lower(), s)
+    return index
+
+
+def match_roster_row(index: dict[str, Student], cells: list[str]) -> Student | None:
+    """Find the student a PeopleSoft grid row refers to.
+
+    The roster splits Surname and First Name into separate columns, so besides
+    trying each cell whole we also try joining pairs of them in both orders.
+    """
+    for cell in cells:
+        for candidate in (cell, flip_name(cell)):
+            found = index.get(candidate.strip().lower())
+            if found:
+                return found
+    for surname in cells:
+        for given in cells:
+            if surname is given:
+                continue
+            found = index.get(f'{given} {surname}'.strip().lower())
+            if found:
+                return found
+    return None
+
+
+def get_class_by_sync_token(token: str) -> Klass:
+    klass = SessionLocal.scalar(select(Klass).where(Klass.sync_token == token))
+    if klass is None:
+        abort(404)
+    if not klass.teacher.ps_upload_enabled:
+        abort(403)
+    return klass
+
+
+def ensure_sync_token(klass: Klass) -> str:
+    if not klass.sync_token:
+        klass.sync_token = new_token()
+        SessionLocal.commit()
+    return klass.sync_token
 
 
 def add_names(klass: Klass, names: list[str]) -> list[str]:
@@ -605,6 +700,156 @@ def api_public_checkin(token):
         SessionLocal.add(PendingCheckin(class_id=klass.id, name=name, day=today))
         SessionLocal.commit()
     return jsonify({'ok': True, 'status': 'pending', 'name': name})
+
+
+# ── Admin ────────────────────────────────────────────────────────────────────
+def admin_required(view):
+    @wraps(view)
+    @login_required
+    def wrapped(*args, **kwargs):
+        if not current_user.is_admin:
+            abort(403)
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def get_teacher(teacher_id: int) -> Teacher:
+    teacher = SessionLocal.get(Teacher, teacher_id)
+    if teacher is None:
+        abort(404)
+    return teacher
+
+
+@app.route('/admin')
+@admin_required
+def admin_page():
+    teachers = SessionLocal.scalars(select(Teacher).order_by(Teacher.created_at)).all()
+    rows = []
+    for t in teachers:
+        students = sum(len(k.students) for k in t.classes)
+        rows.append({'teacher': t, 'classes': len(t.classes), 'students': students})
+    return render_template('admin.html', rows=rows, admin_email=ADMIN_EMAIL)
+
+
+@app.route('/admin/teachers/<int:teacher_id>/peoplesoft', methods=['POST'])
+@admin_required
+def admin_toggle_peoplesoft(teacher_id):
+    teacher = get_teacher(teacher_id)
+    teacher.ps_upload_enabled = not teacher.ps_upload_enabled
+    SessionLocal.commit()
+    state = 'enabled' if teacher.ps_upload_enabled else 'disabled'
+    flash(f'PeopleSoft upload {state} for {teacher.email}.', 'ok')
+    return redirect(url_for('admin_page'))
+
+
+@app.route('/admin/teachers/<int:teacher_id>/admin', methods=['POST'])
+@admin_required
+def admin_toggle_admin(teacher_id):
+    teacher = get_teacher(teacher_id)
+    if teacher.id == current_user.id:
+        flash("You can't remove your own admin access.", 'error')
+    elif teacher.email.strip().lower() == ADMIN_EMAIL:
+        flash(f'{teacher.email} is the ADMIN_EMAIL and stays an admin.', 'error')
+    else:
+        teacher.is_admin = not teacher.is_admin
+        SessionLocal.commit()
+        state = 'now an admin' if teacher.is_admin else 'no longer an admin'
+        flash(f'{teacher.email} is {state}.', 'ok')
+    return redirect(url_for('admin_page'))
+
+
+@app.route('/admin/teachers/<int:teacher_id>/delete', methods=['POST'])
+@admin_required
+def admin_delete_teacher(teacher_id):
+    teacher = get_teacher(teacher_id)
+    if teacher.id == current_user.id:
+        flash("You can't delete your own account.", 'error')
+        return redirect(url_for('admin_page'))
+    if request.form.get('confirm', '').strip().lower() != teacher.email.strip().lower():
+        flash('Type the account\'s email exactly to confirm deletion.', 'error')
+        return redirect(url_for('admin_page'))
+
+    email, classes = teacher.email, len(teacher.classes)
+    SessionLocal.delete(teacher)
+    SessionLocal.commit()
+    flash(f'Deleted {email} and {classes} class(es), including all attendance.', 'ok')
+    return redirect(url_for('admin_page'))
+
+
+# ── PeopleSoft sync (bookmarklet running on the TAFE roster page) ────────────
+PS_ORIGIN = 'https://staff-campus.oci.tafensw.edu.au'
+
+
+@app.after_request
+def sync_cors(resp):
+    """The bookmarklet runs on the TAFE origin, so these routes must allow it."""
+    if request.path.startswith('/api/sync/'):
+        resp.headers['Access-Control-Allow-Origin'] = PS_ORIGIN
+        resp.headers['Vary'] = 'Origin'
+    return resp
+
+
+def bookmarklet_for(api_base: str) -> str:
+    """Inline the sync script into a javascript: URL — CSP blocks loading it remotely."""
+    src = (Path(app.static_folder) / 'ps_sync.js').read_text()
+    body = ' '.join(line.strip() for line in src.splitlines() if line.strip())
+    return 'javascript:' + quote(body.replace('__API__', api_base),
+                                 safe="!$&'()*+,-./:;=?@_~")
+
+
+@app.route('/classes/<int:class_id>/sync')
+@login_required
+def sync_page(class_id):
+    klass = get_owned_class(class_id)
+    if not current_user.ps_upload_enabled:
+        return render_template('sync_disabled.html', klass=klass), 403
+    api_base = url_for('api_sync_present', token=ensure_sync_token(klass),
+                       _external=True).rsplit('/', 1)[0]
+    missing = [s.name for s in sorted_students(klass) if not s.emplid]
+    return render_template('sync.html', klass=klass, missing=missing,
+                           bookmarklet=bookmarklet_for(api_base))
+
+
+@app.route('/api/sync/<token>/roster', methods=['POST'])
+@csrf.exempt
+def api_sync_roster(token):
+    """Learn EMPLID -> student from the roster grid the bookmarklet scraped."""
+    klass = get_class_by_sync_token(token)
+    body = request.get_json(force=True, silent=True) or {}
+
+    index = name_index(klass)
+    learned, unknown, conflicts = 0, [], []
+    for row in body.get('rows', []):
+        emplid = str(row.get('emplid') or '').strip()
+        if not emplid:
+            continue
+        student = match_roster_row(index, [str(c) for c in row.get('cells', [])])
+        if student is None:
+            unknown.append(emplid)
+        elif student.emplid is None:
+            student.emplid = emplid
+            learned += 1
+        elif student.emplid != emplid:
+            conflicts.append(student.name)
+    SessionLocal.commit()
+    return jsonify({'ok': True, 'learned': learned,
+                    'unknown': unknown, 'conflicts': conflicts})
+
+
+@app.route('/api/sync/<token>/present')
+def api_sync_present(token):
+    """The EMPLIDs marked present on a given day."""
+    klass = get_class_by_sync_token(token)
+    try:
+        day = date.fromisoformat(request.args.get('date', ''))
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'date must be YYYY-MM-DD'}), 400
+
+    marked = present_ids(klass.id, day)
+    emplids = [s.emplid for s in klass.students if s.id in marked and s.emplid]
+    missing = [s.name for s in sorted_students(klass) if s.id in marked and not s.emplid]
+    return jsonify({'date': day.isoformat(), 'emplids': emplids,
+                    'missing_emplid': missing})
 
 
 if __name__ == '__main__':
