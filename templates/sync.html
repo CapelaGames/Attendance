@@ -74,21 +74,16 @@
 
   <div class="card-panel" style="margin-top: 18px;">
     <h2 style="font-size: 1rem; margin-bottom: 12px;">1. Install the bookmark</h2>
-    <p style="font-size: .88rem;">
-      Most people want the <b>one bookmark that covers every class</b>, on
-      <a href="{{ url_for('dashboard') }}">your classes page</a>. It works out which class a
-      roster belongs to by itself, so you only need one on your bookmarks bar.
-    </p>
-    <p style="color: var(--muted); font-size: .88rem; margin-top: 10px;">
-      The button below is the <b>{{ klass.name }} only</b> version. It's worth having if you'd
-      rather keep classes separate, or to link this class the first time. Drag it onto your
-      bookmarks bar — no add-ons or admin rights needed, so it works on TAFE machines. Press
+    <p style="color: var(--muted); font-size: .88rem;">
+      This is the same single bookmark for all your classes — it works out which class a
+      roster is from the roster itself, so one on your bookmarks bar is enough. Drag it
+      there; no add-ons or admin rights needed, so it works on TAFE machines. Press
       <b>Ctrl+Shift+B</b> if the bar is hidden.
     </p>
     <p style="margin: 18px 0;">
-      <a href="{{ bookmarklet }}" class="btn"
+      <a href="{{ bookmarklet }}" class="btn primary"
          onclick="alert('Drag this to your bookmarks bar rather than clicking it here.'); return false;"
-         style="text-decoration:none;">{{ klass.name }} → PeopleSoft</a>
+         style="text-decoration:none;">Attendance → PeopleSoft</a>
     </p>
     <p style="color: var(--muted); font-size: .82rem;">
       On a locked-down machine you can instead add a bookmark by hand and paste the code

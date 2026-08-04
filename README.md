@@ -32,9 +32,11 @@ own admin rights.
 
 ## Pushing attendance into PeopleSoft
 
-Each class has a **PeopleSoft** page (`/classes/<id>/sync`) offering a bookmarklet. Drag it
-to your bookmarks bar — it needs no add-on and no admin rights, so it works on TAFE SOE
-machines where extensions can't be installed.
+One bookmarklet covers every class you teach — it's on the dashboard, and on each class's
+**PeopleSoft** page (`/classes/<id>/sync`). Drag it to your bookmarks bar; it needs no add-on
+and no admin rights, so it works on TAFE SOE machines where extensions can't be installed.
+It identifies a roster by the `CLASS_NBR` the page publishes, and if that class isn't linked
+yet it asks which of your classes it is and links it there and then.
 
 Open a class roster in PeopleSoft, click the bookmark, and it ticks everyone this app has
 marked present for that meeting's date, then reports what it did. **It never clicks Save** —

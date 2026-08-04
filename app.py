@@ -960,7 +960,9 @@ def sync_page(class_id):
     klass = get_owned_class(class_id)
     if not current_user.ps_upload_enabled:
         return render_template('sync_disabled.html', klass=klass), 403
-    bridge = url_for('sync_bridge', token=ensure_sync_token(klass), _external=True)
+    # The same bookmark everywhere: it identifies the class from the roster.
+    bridge = url_for('sync_bridge_all',
+                     token=ensure_teacher_sync_token(current_user), _external=True)
     missing = [s.name for s in sorted_students(klass) if not s.emplid]
 
     # The list for a chosen day, so there's a copy-paste path that doesn't
