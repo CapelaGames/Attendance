@@ -532,6 +532,27 @@ def delete_alias(class_id, aid):
     return redirect(url_for('manage_class', class_id=class_id))
 
 
+@app.route('/classes/<int:class_id>/students/<int:sid>/alias', methods=['POST'])
+@login_required
+def add_alias(class_id, sid):
+    klass = get_owned_class(class_id)
+    student = _get_student(klass, sid)
+    name = (request.form.get('name') or '').strip()
+    existing = find_student(klass, name) if name else None
+
+    if not name:
+        flash('Enter an alias.', 'warn')
+    elif existing is student:
+        flash(f'{name} already checks in {student.name}.', 'warn')
+    elif existing is not None:
+        flash(f'{name} already checks in {existing.name}.', 'warn')
+    else:
+        SessionLocal.add(Alias(student_id=student.id, name=name))
+        SessionLocal.commit()
+        flash(f'{name} now checks in {student.name}.', 'ok')
+    return redirect(url_for('manage_class', class_id=class_id))
+
+
 def _get_pending(klass: Klass, pid: int) -> PendingCheckin:
     pc = SessionLocal.get(PendingCheckin, pid)
     if pc is None or pc.class_id != klass.id:

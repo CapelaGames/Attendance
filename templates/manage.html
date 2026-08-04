@@ -21,7 +21,8 @@
   {% if students %}
     <p style="color: var(--muted); font-size: .82rem; margin-bottom: 14px;">
       {{ students|length }} student{{ '' if students|length == 1 else 's' }}. Aliases are alternate
-      names (e.g. nicknames) that also check a student in.
+      names (e.g. nicknames) that also check a student in — and they're how a student whose
+      name differs in PeopleSoft gets matched, so add the PeopleSoft spelling as an alias.
     </p>
     {% for s in students %}
     <div class="card-panel" style="margin-bottom: 10px;">
@@ -38,7 +39,6 @@
           <button class="btn danger">Delete</button>
         </form>
       </div>
-      {% if s.aliases %}
       <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
         <span style="font-size: .78rem; color: var(--muted);">Aliases:</span>
         {% for a in s.aliases %}
@@ -53,8 +53,17 @@
           </form>
         </span>
         {% endfor %}
+        <form method="post" action="{{ url_for('add_alias', class_id=klass.id, sid=s.id) }}"
+              style="display: flex; gap: 6px; align-items: center;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="text" name="name" placeholder="Add an alias" autocomplete="off"
+                 style="font-size: .82rem; padding: 3px 10px; width: 150px;">
+          <button class="btn" style="padding: 3px 12px;">Add</button>
+        </form>
+        {% if s.emplid %}
+          <span style="font-size: .72rem; color: var(--muted);">ID {{ s.emplid }}</span>
+        {% endif %}
       </div>
-      {% endif %}
     </div>
     {% endfor %}
   {% else %}
