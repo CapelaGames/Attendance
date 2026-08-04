@@ -164,40 +164,43 @@
     return note;
   }
 
-  /* The TAFE page's CSP blocks fetch() to another origin, so we hand the work to
-     a popup on the app's own domain and exchange postMessage, which CSP allows. */
+  /* TAFE's CSP blocks fetch() to another origin, so the work happens in a popup on
+     the app's own domain. It posts the answer back when it can — but the roster
+     page's COOP may sever the link between the windows, in which case the popup
+     shows the list for copying and we ask for a paste instead. */
   function viaBridge(doc, rows, day) {
-    var win = window.open(BRIDGE, 'attendance_bridge', 'width=460,height=300');
+    var url = BRIDGE + '?p=' + encodeURIComponent(
+      JSON.stringify({ date: day, rows: rows }));
+    var win = window.open(url, 'attendance_bridge', 'width=520,height=440');
     if (!win) {
       pasteFallback(doc, rows, day, 'popup blocked — allow popups for this site');
       return;
     }
 
     var settled = false;
-    function finish() {
-      settled = true;
-      window.removeEventListener('message', onMessage);
-      try { win.close(); } catch (e) { }
-    }
     function onMessage(e) {
       if (e.origin !== APP || settled) { return; }
       var msg = e.data || {};
-      if (msg.type === 'ready') {
-        win.postMessage({ type: 'sync', rows: rows, date: day }, APP);
-      } else if (msg.type === 'result') {
-        finish();
+      if (msg.type === 'result') {
+        settled = true;
+        window.removeEventListener('message', onMessage);
+        try { win.close(); } catch (err) { }
         apply(doc, rows, msg.emplids || [], day, noteFrom(msg));
       } else if (msg.type === 'error') {
-        finish();
+        settled = true;
+        window.removeEventListener('message', onMessage);
         alert('The attendance app reported: ' + msg.message + '\n\nNothing was changed.');
       }
     }
     window.addEventListener('message', onMessage);
+
+    /* Leave the popup open — if we got no answer it is showing the list to copy. */
     window.setTimeout(function () {
       if (settled) { return; }
-      finish();
-      pasteFallback(doc, rows, day, 'no reply from the app');
-    }, 20000);
+      settled = true;
+      window.removeEventListener('message', onMessage);
+      pasteFallback(doc, rows, day, 'paste the list from the window that just opened');
+    }, 12000);
   }
 
   var docs = allDocs();

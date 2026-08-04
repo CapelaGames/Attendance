@@ -4,32 +4,57 @@
   <meta charset="utf-8">
   <title>Attendance sync</title>
   <style>
-    body { font: 14px system-ui, sans-serif; margin: 0; padding: 28px 24px;
-           color: #222; background: #fff; }
-    h1 { font-size: 15px; margin: 0 0 10px; }
-    p { margin: 0 0 8px; color: #666; font-size: 13px; }
-    .err { color: #c62828; }
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 22px;
+           color: #1a1a1a; background: #fff; }
+    h1 { font-size: 15px; margin: 0 0 12px; }
+    p { margin: 0 0 10px; color: #555; font-size: 13px; }
+    .ok { color: #2e7d32; } .err { color: #c62828; }
+    #ids { width: 100%; box-sizing: border-box; font: 13px/1.5 ui-monospace, monospace;
+           padding: 10px; border: 1px solid #bbb; border-radius: 6px; height: 90px; }
+    button { font: 13px system-ui, sans-serif; padding: 8px 14px; border-radius: 6px;
+             border: 1px solid #bbb; background: #f4f4f4; cursor: pointer; }
+    #manual { display: none; }
+    ol { margin: 8px 0 0; padding-left: 20px; color: #555; font-size: 13px; }
   </style>
 </head>
 <body>
   <h1>Attendance sync</h1>
-  <p id="status">Talking to the roster page…</p>
-  <p>This window closes by itself.</p>
+  <p id="status">Working…</p>
+
+  <div id="manual">
+    <textarea id="ids" readonly></textarea>
+    <p style="margin-top:10px;">
+      <button id="copy">Copy list</button>
+      <span id="copied" class="ok"></span>
+    </p>
+    <ol>
+      <li>Switch back to the PeopleSoft roster tab.</li>
+      <li>Paste this list into the box it shows you.</li>
+      <li>Check the grid, then click <b>Save</b> yourself.</li>
+    </ol>
+  </div>
 
   <script>
-    /* The TAFE page's CSP blocks it from calling this app directly, so the
-       bookmarklet opens this window instead and we exchange postMessage. */
+    /* Opened by the bookmarklet. TAFE's CSP stops the roster page calling this
+       app directly, so the work happens here instead. We try to postMessage the
+       result straight back, but the roster page's COOP may have severed the
+       opener link — so the list is always shown for copying by hand. */
     var PS = {{ ps_origin|tojson }};
     var API = {{ ('/api/sync/' + token)|tojson }};
-    var status = document.getElementById('status');
 
-    function say(text, isError) {
-      status.textContent = text;
-      status.className = isError ? 'err' : '';
+    var statusEl = document.getElementById('status');
+    var manual = document.getElementById('manual');
+    var idsEl = document.getElementById('ids');
+
+    function say(text, cls) {
+      statusEl.textContent = text;
+      statusEl.className = cls || '';
     }
 
-    function reply(target, payload) {
-      try { target.postMessage(payload, PS); } catch (e) { say(String(e), true); }
+    function tell(payload) {
+      if (!window.opener) { return false; }
+      try { window.opener.postMessage(payload, PS); return true; }
+      catch (e) { return false; }
     }
 
     function asJson(r) {
@@ -37,37 +62,82 @@
       return r.json();
     }
 
-    window.addEventListener('message', function (e) {
-      if (e.origin !== PS) { return; }
-      var msg = e.data || {};
-      if (msg.type !== 'sync') { return; }
+    function showManually(emplids, note) {
+      idsEl.value = emplids.join(', ');
+      manual.style.display = 'block';
+      say(emplids.length
+        ? 'Could not reach the roster page automatically — copy the list below.'
+        : 'Nobody is marked present for that date in the attendance app.',
+        emplids.length ? 'err' : '');
+      if (note) {
+        var p = document.createElement('p');
+        p.textContent = note;
+        manual.appendChild(p);
+      }
+      idsEl.focus();
+      idsEl.select();
+      if (navigator.clipboard && emplids.length) {
+        navigator.clipboard.writeText(idsEl.value).then(function () {
+          document.getElementById('copied').textContent = 'Copied to clipboard.';
+        }, function () { });
+      }
+    }
 
+    document.getElementById('copy').addEventListener('click', function () {
+      idsEl.select();
+      var done = function () {
+        document.getElementById('copied').textContent = 'Copied.';
+      };
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(idsEl.value).then(done, function () {
+          document.execCommand('copy'); done();
+        });
+      } else { document.execCommand('copy'); done(); }
+    });
+
+    var payload;
+    try {
+      payload = JSON.parse(decodeURIComponent(
+        (location.search.match(/[?&]p=([^&]*)/) || [])[1] || ''));
+    } catch (e) { payload = null; }
+
+    if (!payload || !payload.date) {
+      say('Open this from the Attendance bookmark on a PeopleSoft roster page.', 'err');
+    } else {
       say('Matching students…');
       fetch(API + '/roster', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: msg.rows })
+        body: JSON.stringify({ rows: payload.rows || [] })
       }).then(asJson).then(function (learn) {
-        return fetch(API + '/present?date=' + encodeURIComponent(msg.date))
+        return fetch(API + '/present?date=' + encodeURIComponent(payload.date))
           .then(asJson).then(function (data) {
-            say('Done — check the roster page.');
-            reply(e.source, {
-              type: 'result',
-              emplids: data.emplids || [],
-              missing_emplid: data.missing_emplid || [],
-              learn: learn
+            var note = '';
+            if (learn.unknown && learn.unknown.length) {
+              note += learn.unknown.length + ' student(s) on this roster are not in your app. ';
+            }
+            if (learn.conflicts && learn.conflicts.length) {
+              note += 'ID conflicts: ' + learn.conflicts.join(', ') + '. ';
+            }
+            if (data.missing_emplid && data.missing_emplid.length) {
+              note += 'No ID yet for: ' + data.missing_emplid.join(', ') + '.';
+            }
+            var sent = tell({
+              type: 'result', emplids: data.emplids || [],
+              missing_emplid: data.missing_emplid || [], learn: learn
             });
+            if (sent) {
+              say('Done — check the roster page. This window closes itself.', 'ok');
+              setTimeout(function () { window.close(); }, 2500);
+            } else {
+              showManually(data.emplids || [], note);
+            }
           });
       }).catch(function (err) {
-        say(String(err.message || err), true);
-        reply(e.source, { type: 'error', message: String(err.message || err) });
+        var message = String(err.message || err);
+        say(message, 'err');
+        tell({ type: 'error', message: message });
       });
-    });
-
-    if (window.opener) {
-      reply(window.opener, { type: 'ready' });
-    } else {
-      say('Open this from the bookmarklet on a PeopleSoft roster page.', true);
     }
   </script>
 </body>

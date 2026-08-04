@@ -47,8 +47,12 @@ and pairs each one with a student whose name or alias matches exactly (handling 
 rename or an alias. An EMPLID is never silently overwritten; mismatches are reported as
 conflicts.
 
-If the TAFE page's content security policy blocks the call back to this app, the bookmarklet
-falls back to prompting you to paste the ID list.
+TAFE's roster page forbids contacting other sites, so the bookmarklet can't call this app
+directly. Instead it opens a small window on this app's own domain which does the work and
+posts the answer back. If the roster page has also severed the link between the two windows
+(`Cross-Origin-Opener-Policy`), that reply can't arrive — so the window always shows the ID
+list and copies it to your clipboard, and the bookmarklet asks you to paste it. Either way
+you end up in the same place; one path is automatic and the other is one paste.
 
 The sync link carries a per-class secret (`Klass.sync_token`, separate from the student QR
 token) and can read student IDs, so don't leave it on a shared machine's bookmarks bar.
