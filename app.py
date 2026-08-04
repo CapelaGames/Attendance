@@ -781,6 +781,7 @@ def admin_delete_teacher(teacher_id):
 
 # ── PeopleSoft sync (bookmarklet running on the TAFE roster page) ────────────
 PS_ORIGIN = 'https://staff-campus.oci.tafensw.edu.au'
+PS_WORKCENTRE = PS_ORIGIN + '/psp/pdcmp/EMPLOYEE/SA/c/RX_MENU.RX_AT_WORKAREA.GBL'
 
 
 @app.after_request
@@ -826,7 +827,7 @@ def sync_page(class_id):
     students = sorted_students(klass)
     return render_template(
         'sync.html', klass=klass, missing=missing, bookmarklet=bookmarklet_for(bridge),
-        day=day,
+        day=day, workcentre_url=PS_WORKCENTRE,
         present_ids_list=[s.emplid for s in students if s.id in marked and s.emplid],
         present_no_id=[s.name for s in students if s.id in marked and not s.emplid])
 

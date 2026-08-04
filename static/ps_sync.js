@@ -176,13 +176,6 @@
     alert(msg);
   }
 
-  function pasteFallback(doc, rows, day, lead) {
-    var raw = window.prompt(lead, '');
-    if (!raw) { return; }
-    var ids = raw.split(/[^0-9A-Za-z]+/).filter(function (s) { return s.length > 0; });
-    apply(doc, rows, ids, day, 'Pasted manually.');
-  }
-
   function noteFrom(msg) {
     var learn = msg.learn || {};
     var note = '';
@@ -211,14 +204,6 @@
     var url = BRIDGE + '?p=' + encodeURIComponent(
       JSON.stringify({ date: day, rows: sending }));
     var win = window.open(url, 'attendance_bridge', 'width=520,height=440');
-    if (!win) {
-      pasteFallback(doc, rows, day,
-        'The popup was blocked — allow popups for this site and click the bookmark again.'
-        + '\n\nOr open your attendance app, copy the ID list for ' + day
-        + ', and paste it here:');
-      return;
-    }
-
     var settled = false;
     function onMessage(e) {
       if (e.origin !== APP || settled) { return; }
@@ -236,18 +221,32 @@
     }
     window.addEventListener('message', onMessage);
 
-    /* Leave the popup open — if we got no answer it is showing the list to copy. */
-    window.setTimeout(function () {
-      if (settled) { return; }
+    /* Ask straight away rather than waiting on a reply that TAFE's settings
+       usually prevent. The prompt only blocks this tab, so the popup keeps
+       working behind it — copy from there whenever you're ready. */
+    var lead = win
+      ? 'Paste the ID list for ' + day + ' and press OK.'
+        + '\n\nIt is in the window that just opened, already copied to your clipboard'
+        + " — so Ctrl+V should do it. It's also on the class's PeopleSoft page"
+        + ' in your attendance app.'
+      : 'The popup was blocked — allow popups for this site, or copy the list from'
+        + " the class's PeopleSoft page in your attendance app."
+        + '\n\nPaste the ID list for ' + day + ' here:';
+
+    var raw = window.prompt(lead, '');
+    if (raw) {
       settled = true;
       window.removeEventListener('message', onMessage);
-      pasteFallback(doc, rows, day,
-        "TAFE's security settings stop the two windows talking to each other."
-        + '\n\nA window or tab just opened showing the ID list for ' + day
-        + ', already copied to your clipboard. Press Ctrl+V here, then OK.'
-        + "\n\nIf you can't see it, open the class in your attendance app and copy"
-        + ' the list from the PeopleSoft page there:');
-    }, 8000);
+      var ids = raw.split(/[^0-9A-Za-z]+/).filter(function (s) { return s.length > 0; });
+      apply(doc, rows, ids, day, 'Pasted manually.');
+      try { if (win) { win.close(); } } catch (e) { }
+      return;
+    }
+
+    /* Cancelled — leave the listener up briefly in case the windows can talk. */
+    window.setTimeout(function () {
+      if (!settled) { window.removeEventListener('message', onMessage); }
+    }, 15000);
   }
 
   var docs = allDocs();
