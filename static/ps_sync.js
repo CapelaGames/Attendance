@@ -97,6 +97,32 @@
     return null;
   }
 
+  /* PeopleSoft codes attendance as a dropdown whose value we can't assume: take
+     "Y" if it's there, else whatever is labelled Present, else a "P" code. */
+  function presentOption(f) {
+    var i, o;
+    for (i = 0; i < f.options.length; i++) {
+      if (String(f.options[i].value).trim().toUpperCase() === 'Y') { return f.options[i].value; }
+    }
+    for (i = 0; i < f.options.length; i++) {
+      o = f.options[i];
+      if (String(o.text || '').trim().toUpperCase() === 'PRESENT') { return o.value; }
+    }
+    for (i = 0; i < f.options.length; i++) {
+      if (String(f.options[i].value).trim().toUpperCase() === 'P') { return f.options[i].value; }
+    }
+    return null;
+  }
+
+  function optionSummary(f) {
+    var bits = [];
+    for (var i = 0; i < f.options.length && i < 8; i++) {
+      bits.push(JSON.stringify(String(f.options[i].value)) + '=' +
+                JSON.stringify(String(f.options[i].text || '').trim()));
+    }
+    return bits.length ? bits.join(' ') : 'dropdown has no options';
+  }
+
   /* Set the field the way the page's own handlers expect, so PeopleSoft runs its
      usual row logic (participation, date) instead of us reconstructing it. */
   function mark(doc, row) {
@@ -105,13 +131,11 @@
     var win = doc.defaultView || window;
 
     if (f.tagName === 'SELECT') {
-      var wanted = null;
-      for (var i = 0; i < f.options.length; i++) {
-        if (String(f.options[i].value).toUpperCase() === 'Y') { wanted = f.options[i].value; }
-      }
-      if (wanted === null) { return 'no "Y" option'; }
+      var wanted = presentOption(f);
+      if (wanted === null) { return 'no Present option [' + optionSummary(f) + ']'; }
       if (f.value === wanted) { return 'already'; }
       f.value = wanted;
+      if (f.selectedIndex < 0) { return 'select rejected it [' + optionSummary(f) + ']'; }
     } else if (f.type === 'checkbox') {
       if (f.checked) { return 'already'; }
       f.click();
@@ -140,10 +164,13 @@
       else if (res === 'already') { already++; }
       else { failed.push(id + ' (' + res + ')'); }
     }
-    var msg = 'Marked ' + marked + ' present for ' + day + '.';
+    var msg = 'Marked ' + marked + ' present for ' + day +
+      ' (' + rows.length + ' students on this roster).';
     if (already) { msg += '\n' + already + ' were already marked.'; }
     if (missing.length) { msg += '\n\nNot on this roster: ' + missing.join(', '); }
-    if (failed.length) { msg += '\n\nCould not set: ' + failed.join(', '); }
+    if (failed.length) {
+      msg += '\n\nCould not set ' + failed.length + ' row(s). First: ' + failed[0];
+    }
     if (note) { msg += '\n\n' + note; }
     msg += '\n\nCheck the grid, then click Save yourself.';
     alert(msg);
