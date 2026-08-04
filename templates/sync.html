@@ -34,21 +34,41 @@
         roster it will refuse rather than mark the wrong students, which matters when you
         teach two classes on the same day.
       </p>
+      <form method="post" action="{{ url_for('link_peoplesoft', class_id=klass.id) }}"
+            style="display:flex; gap:8px; align-items:center; margin-top: 12px; flex-wrap:wrap;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="class_nbr" placeholder="e.g. 58612" autocomplete="off"
+               value="{{ klass.ps_class_nbr }}" style="width: 140px;">
+        <button class="btn primary">Change</button>
+        <span style="color: var(--muted); font-size: .82rem;">
+          It's the <code>CLASS_NBR</code> in the roster page's address bar.
+        </span>
+      </form>
       <form method="post" action="{{ url_for('unlink_peoplesoft', class_id=klass.id) }}"
             style="margin-top: 12px;"
             onsubmit="return confirm('Unlink this class from PeopleSoft class {{ klass.ps_class_nbr }}?');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn">Unlink</button>
         <span style="color: var(--muted); font-size: .82rem; margin-left: 8px;">
-          Only needed if this class moves to a different PeopleSoft class, e.g. a new term.
+          Clears it so the next run links to whichever roster you use.
         </span>
       </form>
     {% else %}
       <p style="color: var(--muted); font-size: .88rem;">
-        Not linked yet. The first time you run the bookmark, this class is tied to whichever
-        PeopleSoft roster you run it on — after that, running it on a different class's
-        roster is refused instead of marking the wrong students.
+        Not linked yet. It links itself to whichever PeopleSoft roster you first run the
+        bookmark on, and refuses other rosters after that — so make that first run count,
+        or set the class number here yourself.
       </p>
+      <form method="post" action="{{ url_for('link_peoplesoft', class_id=klass.id) }}"
+            style="display:flex; gap:8px; align-items:center; margin-top: 12px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="class_nbr" placeholder="e.g. 58612" autocomplete="off"
+               style="width: 140px;">
+        <button class="btn primary">Link</button>
+        <span style="color: var(--muted); font-size: .82rem;">
+          It's the <code>CLASS_NBR</code> in the roster page's address bar.
+        </span>
+      </form>
     {% endif %}
   </div>
 

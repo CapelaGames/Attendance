@@ -40,7 +40,7 @@
        result straight back, but the roster page's COOP may have severed the
        opener link — so the list is always shown for copying by hand. */
     var PS = {{ ps_origin|tojson }};
-    var API = {{ ('/api/sync/' + token)|tojson }};
+    var API = {{ api_base|tojson }};
 
     var statusEl = document.getElementById('status');
     var manual = document.getElementById('manual');
@@ -123,9 +123,14 @@
           strm: payload.strm || '', label: payload.label || ''
         })
       }).then(asJson).then(function (learn) {
-        return fetch(API + '/present?date=' + encodeURIComponent(payload.date))
+        return fetch(API + '/present?date=' + encodeURIComponent(payload.date)
+               + '&class_nbr=' + encodeURIComponent(payload.class_nbr || ''))
           .then(asJson).then(function (data) {
-            var note = '';
+            var note = data.klass ? ('Attendance app class: ' + data.klass + '. ') : '';
+            if (learn.linked_now) {
+              note += 'Now linked to PeopleSoft class ' + learn.linked_now +
+                ' — check that is right. ';
+            }
             if (learn.unknown && learn.unknown.length) {
               note += learn.unknown.length + ' student(s) on this roster are not in your app. ';
             }
@@ -138,7 +143,8 @@
             showList(data.emplids || [], note, payload.date);
             tell({
               type: 'result', emplids: data.emplids || [],
-              missing_emplid: data.missing_emplid || [], learn: learn
+              missing_emplid: data.missing_emplid || [], learn: learn,
+              klass: data.klass || ''
             });
           });
       }).catch(function (err) {

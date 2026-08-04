@@ -98,6 +98,9 @@ class Teacher(Base, UserMixin):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # One bookmark for every class: the roster names its own PeopleSoft class,
+    # so this token resolves to whichever class is linked to it.
+    sync_token: Mapped[str | None] = mapped_column(String(32), unique=True)
     # New accounts start without PeopleSoft access; an admin turns it on.
     ps_upload_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -182,7 +185,8 @@ def add_missing_columns() -> None:
              # Accounts predating this column keep PeopleSoft access; only
              # accounts created afterwards start disabled.
              'teacher': [('is_admin', 'BOOLEAN DEFAULT 0 NOT NULL'),
-                         ('ps_upload_enabled', 'BOOLEAN DEFAULT 1 NOT NULL')]}
+                         ('ps_upload_enabled', 'BOOLEAN DEFAULT 1 NOT NULL'),
+                         ('sync_token', 'VARCHAR(32)')]}
     insp = sa_inspect(engine)
     with engine.begin() as conn:
         for table, columns in added.items():
@@ -359,6 +363,32 @@ def ensure_sync_token(klass: Klass) -> str:
     return klass.sync_token
 
 
+def ensure_teacher_sync_token(teacher: Teacher) -> str:
+    if not teacher.sync_token:
+        teacher.sync_token = new_token()
+        SessionLocal.commit()
+    return teacher.sync_token
+
+
+def resolve_class(token: str, class_nbr: str) -> Klass | Teacher:
+    """For the one-bookmark-for-everything flow: which class is this roster?
+
+    Returns the Klass when the PeopleSoft class is linked to one, or the Teacher
+    when it isn't, so the caller can say what to do about it.
+    """
+    teacher = SessionLocal.scalar(select(Teacher).where(Teacher.sync_token == token))
+    if teacher is None:
+        abort(404)
+    if not teacher.ps_upload_enabled:
+        abort(403)
+    if not class_nbr:
+        return teacher
+    for klass in teacher.classes:
+        if klass.ps_class_nbr == class_nbr:
+            return klass
+    return teacher
+
+
 def add_names(klass: Klass, names: list[str]) -> list[str]:
     """Add de-duplicated names to a class. Returns names actually added."""
     existing = {s.name.strip().lower() for s in klass.students}
@@ -457,7 +487,13 @@ def logout():
 @login_required
 def dashboard():
     classes = sorted(current_user.classes, key=lambda k: k.name.lower())
-    return render_template('dashboard.html', classes=classes)
+    bookmarklet = None
+    if current_user.ps_upload_enabled:
+        bridge = url_for('sync_bridge_all',
+                         token=ensure_teacher_sync_token(current_user), _external=True)
+        bookmarklet = bookmarklet_for(bridge)
+    return render_template('dashboard.html', classes=classes, bookmarklet=bookmarklet,
+                           unlinked=[k for k in classes if not k.ps_class_nbr])
 
 
 @app.route('/classes', methods=['POST'])
@@ -813,7 +849,7 @@ PS_WORKCENTRE = PS_ORIGIN + '/psp/pdcmp/EMPLOYEE/SA/c/RX_MENU.RX_AT_WORKAREA.GBL
 @app.after_request
 def sync_cors(resp):
     """The bookmarklet runs on the TAFE origin, so these routes must allow it."""
-    if request.path.startswith('/api/sync/'):
+    if request.path.startswith(('/api/sync/', '/api/tsync/')):
         resp.headers['Access-Control-Allow-Origin'] = PS_ORIGIN
         resp.headers['Vary'] = 'Origin'
     return resp
@@ -831,7 +867,48 @@ def bookmarklet_for(bridge_url: str) -> str:
 def sync_bridge(token):
     """Same-origin helper window the bookmarklet talks to over postMessage."""
     get_class_by_sync_token(token)
-    return render_template('bridge.html', token=token, ps_origin=PS_ORIGIN)
+    return render_template('bridge.html', api_base=f'/api/sync/{token}',
+                           ps_origin=PS_ORIGIN)
+
+
+@app.route('/sync/t/<token>/bridge')
+def sync_bridge_all(token):
+    """The all-classes bookmark: the roster tells us which class it is."""
+    resolve_class(token, '')
+    return render_template('bridge.html', api_base=f'/api/tsync/{token}',
+                           ps_origin=PS_ORIGIN)
+
+
+def no_class_linked(teacher: Teacher, class_nbr: str):
+    linked = [f'{k.ps_class_nbr} → {k.name}' for k in teacher.classes if k.ps_class_nbr]
+    detail = ('Linked so far: ' + '; '.join(linked)) if linked else \
+             'None of your classes are linked yet.'
+    return jsonify({
+        'ok': False, 'mismatch': True,
+        'message': (f'No class in your attendance app is linked to PeopleSoft class '
+                    f'{class_nbr or "(unknown)"}. Open the right class, go to its '
+                    f'PeopleSoft page, and link it. {detail}'),
+    }), 409
+
+
+@app.route('/api/tsync/<token>/roster', methods=['POST'])
+@csrf.exempt
+def api_tsync_roster(token):
+    body = request.get_json(force=True, silent=True) or {}
+    class_nbr = str(body.get('class_nbr') or '').strip()
+    found = resolve_class(token, class_nbr)
+    if isinstance(found, Teacher):
+        return no_class_linked(found, class_nbr)
+    return sync_roster(found, body)
+
+
+@app.route('/api/tsync/<token>/present')
+def api_tsync_present(token):
+    class_nbr = str(request.args.get('class_nbr') or '').strip()
+    found = resolve_class(token, class_nbr)
+    if isinstance(found, Teacher):
+        return no_class_linked(found, class_nbr)
+    return sync_present(found)
 
 
 @app.route('/classes/<int:class_id>/sync')
@@ -858,6 +935,28 @@ def sync_page(class_id):
         present_no_id=[s.name for s in students if s.id in marked and not s.emplid])
 
 
+@app.route('/classes/<int:class_id>/link-peoplesoft', methods=['POST'])
+@login_required
+def link_peoplesoft(class_id):
+    """Set the PeopleSoft class deliberately, rather than trusting the first run."""
+    klass = get_owned_class(class_id)
+    nbr = (request.form.get('class_nbr') or '').strip()
+    if not nbr.isalnum() or len(nbr) > 20:
+        flash('Enter the PeopleSoft class number, e.g. 58612.', 'warn')
+    else:
+        clash = SessionLocal.scalar(
+            select(Klass).where(Klass.teacher_id == current_user.id,
+                                Klass.ps_class_nbr == nbr, Klass.id != klass.id))
+        if clash is not None:
+            flash(f'Class {nbr} is already linked to {clash.name}.', 'warn')
+        else:
+            klass.ps_class_nbr = nbr
+            klass.ps_label = None
+            SessionLocal.commit()
+            flash(f'Linked to PeopleSoft class {nbr}.', 'ok')
+    return redirect(url_for('sync_page', class_id=class_id))
+
+
 @app.route('/classes/<int:class_id>/unlink-peoplesoft', methods=['POST'])
 @login_required
 def unlink_peoplesoft(class_id):
@@ -870,21 +969,18 @@ def unlink_peoplesoft(class_id):
     return redirect(url_for('sync_page', class_id=class_id))
 
 
-@app.route('/api/sync/<token>/roster', methods=['POST'])
-@csrf.exempt
-def api_sync_roster(token):
+def sync_roster(klass: Klass, body: dict):
     """Learn EMPLID -> student from the roster grid the bookmarklet scraped."""
-    klass = get_class_by_sync_token(token)
-    body = request.get_json(force=True, silent=True) or {}
-
     # Refuse to touch a roster belonging to a different PeopleSoft class: a
     # student enrolled in two of them would otherwise be marked on the wrong one.
     class_nbr = str(body.get('class_nbr') or '').strip()
+    linked_now = None
     if class_nbr:
         if not klass.ps_class_nbr:
             klass.ps_class_nbr = class_nbr
             klass.ps_label = (str(body.get('label') or '').strip() or None)
             SessionLocal.commit()
+            linked_now = class_nbr
         elif klass.ps_class_nbr != class_nbr:
             return jsonify({
                 'ok': False, 'mismatch': True,
@@ -909,14 +1005,19 @@ def api_sync_roster(token):
         elif student.emplid != emplid:
             conflicts.append(student.name)
     SessionLocal.commit()
-    return jsonify({'ok': True, 'learned': learned,
-                    'unknown': unknown, 'conflicts': conflicts})
+    return jsonify({'ok': True, 'learned': learned, 'unknown': unknown,
+                    'conflicts': conflicts, 'linked_now': linked_now})
 
 
-@app.route('/api/sync/<token>/present')
-def api_sync_present(token):
-    """The EMPLIDs marked present on a given day."""
+@app.route('/api/sync/<token>/roster', methods=['POST'])
+@csrf.exempt
+def api_sync_roster(token):
     klass = get_class_by_sync_token(token)
+    return sync_roster(klass, request.get_json(force=True, silent=True) or {})
+
+
+def sync_present(klass: Klass):
+    """The EMPLIDs marked present on a given day."""
     try:
         day = date.fromisoformat(request.args.get('date', ''))
     except ValueError:
@@ -926,7 +1027,12 @@ def api_sync_present(token):
     emplids = [s.emplid for s in klass.students if s.id in marked and s.emplid]
     missing = [s.name for s in sorted_students(klass) if s.id in marked and not s.emplid]
     return jsonify({'date': day.isoformat(), 'emplids': emplids,
-                    'missing_emplid': missing})
+                    'missing_emplid': missing, 'klass': klass.name})
+
+
+@app.route('/api/sync/<token>/present')
+def api_sync_present(token):
+    return sync_present(get_class_by_sync_token(token))
 
 
 if __name__ == '__main__':

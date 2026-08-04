@@ -240,7 +240,11 @@
 
   function noteFrom(msg) {
     var learn = msg.learn || {};
-    var note = '';
+    var note = msg.klass ? ('Attendance app class: ' + msg.klass + '.\n') : '';
+    if (learn.linked_now) {
+      note += 'This class is now linked to PeopleSoft class ' + learn.linked_now +
+        '. Check that is the right one — it will refuse other rosters from now on.\n';
+    }
     if (learn.unknown && learn.unknown.length) {
       note += learn.unknown.length + ' student(s) on this roster are not in your app.';
     }
