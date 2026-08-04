@@ -120,11 +120,13 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rows: payload.rows || [], class_nbr: payload.class_nbr || '',
-          strm: payload.strm || '', label: payload.label || ''
+          related: payload.related || [], strm: payload.strm || '',
+          label: payload.label || ''
         })
       }).then(asJson).then(function (learn) {
         return fetch(API + '/present?date=' + encodeURIComponent(payload.date)
-               + '&class_nbr=' + encodeURIComponent(payload.class_nbr || ''))
+               + '&class_nbr=' + encodeURIComponent(payload.class_nbr || '')
+               + '&related=' + encodeURIComponent((payload.related || []).join(',')))
           .then(asJson).then(function (data) {
             var note = data.klass ? ('Attendance app class: ' + data.klass + '. ') : '';
             if (learn.linked_now) {

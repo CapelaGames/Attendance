@@ -103,10 +103,30 @@
       var m = /[?&]CLASS_NBR=(\w+)/i.exec(href) || /[?&]CLASS_NBR=(\w+)/i.exec(doc.referrer || '');
       if (m) { out.class_nbr = m[1]; }
     }
+    /* A section can combine several classes — the roster covers all of them, so
+       any of their numbers should identify it, not just the one in the URL. */
+    var related = [], rows = doc.querySelectorAll('[id*="RX_AT_REL_CLS"]');
+    for (var i = 0; i < rows.length; i++) {
+      var tr = rows[i].closest ? rows[i].closest('tr') : null;
+      if (!tr) { continue; }
+      var found = String(tr.textContent || '').match(/\b\d{4,7}\b/g) || [];
+      for (var j = 0; j < found.length; j++) {
+        if (related.indexOf(found[j]) === -1 && related.length < 12) {
+          related.push(found[j]);
+        }
+      }
+    }
+    if (related.length) { out.related = related; }
+
     var head = doc.getElementById('win0divRX_AT_HEADER_HTMLAREA1');
     if (head) {
-      var label = (head.textContent || '').replace(/\s+/g, ' ').trim();
-      if (label) { out.label = label.slice(0, 120); }
+      /* <br>-separated lines run together in textContent; we only want the title. */
+      var lines = String(head.innerHTML || '')
+        .replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '').split('\n');
+      for (var k = 0; k < lines.length; k++) {
+        var line = lines[k].replace(/\s+/g, ' ').trim();
+        if (line) { out.label = line.slice(0, 120); break; }
+      }
     }
     return out;
   }
@@ -269,8 +289,8 @@
     }
     var keys = classKeys(doc);
     var url = BRIDGE + '?p=' + encodeURIComponent(JSON.stringify({
-      date: day, rows: sending,
-      class_nbr: keys.class_nbr || '', strm: keys.strm || '', label: keys.label || ''
+      date: day, rows: sending, class_nbr: keys.class_nbr || '',
+      related: keys.related || [], strm: keys.strm || '', label: keys.label || ''
     }));
     var win = window.open(url, 'attendance_bridge', 'width=520,height=440');
     var settled = false;

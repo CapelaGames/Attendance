@@ -370,7 +370,21 @@ def ensure_teacher_sync_token(teacher: Teacher) -> str:
     return teacher.sync_token
 
 
-def resolve_class(token: str, class_nbr: str) -> Klass | Teacher:
+def section_numbers(class_nbr: str, related) -> list[str]:
+    """Every PeopleSoft class number that identifies this roster.
+
+    A combined section covers several classes at once, so reaching the same
+    roster through any of them has to count as the same class.
+    """
+    numbers = [class_nbr] if class_nbr else []
+    for nbr in (related or [])[:12]:
+        nbr = str(nbr).strip()
+        if nbr and nbr not in numbers:
+            numbers.append(nbr)
+    return numbers
+
+
+def resolve_class(token: str, class_nbr: str, related=None) -> Klass | Teacher:
     """For the one-bookmark-for-everything flow: which class is this roster?
 
     Returns the Klass when the PeopleSoft class is linked to one, or the Teacher
@@ -381,10 +395,11 @@ def resolve_class(token: str, class_nbr: str) -> Klass | Teacher:
         abort(404)
     if not teacher.ps_upload_enabled:
         abort(403)
-    if not class_nbr:
+    numbers = section_numbers(class_nbr, related)
+    if not numbers:
         return teacher
     for klass in teacher.classes:
-        if klass.ps_class_nbr == class_nbr:
+        if klass.ps_class_nbr in numbers:
             return klass
     return teacher
 
@@ -896,7 +911,7 @@ def no_class_linked(teacher: Teacher, class_nbr: str):
 def api_tsync_roster(token):
     body = request.get_json(force=True, silent=True) or {}
     class_nbr = str(body.get('class_nbr') or '').strip()
-    found = resolve_class(token, class_nbr)
+    found = resolve_class(token, class_nbr, body.get('related'))
     if isinstance(found, Teacher):
         return no_class_linked(found, class_nbr)
     return sync_roster(found, body)
@@ -905,7 +920,8 @@ def api_tsync_roster(token):
 @app.route('/api/tsync/<token>/present')
 def api_tsync_present(token):
     class_nbr = str(request.args.get('class_nbr') or '').strip()
-    found = resolve_class(token, class_nbr)
+    related = [n for n in (request.args.get('related') or '').split(',') if n.strip()]
+    found = resolve_class(token, class_nbr, related)
     if isinstance(found, Teacher):
         return no_class_linked(found, class_nbr)
     return sync_present(found)
@@ -974,6 +990,7 @@ def sync_roster(klass: Klass, body: dict):
     # Refuse to touch a roster belonging to a different PeopleSoft class: a
     # student enrolled in two of them would otherwise be marked on the wrong one.
     class_nbr = str(body.get('class_nbr') or '').strip()
+    numbers = section_numbers(class_nbr, body.get('related'))
     linked_now = None
     if class_nbr:
         if not klass.ps_class_nbr:
@@ -981,7 +998,7 @@ def sync_roster(klass: Klass, body: dict):
             klass.ps_label = (str(body.get('label') or '').strip() or None)
             SessionLocal.commit()
             linked_now = class_nbr
-        elif klass.ps_class_nbr != class_nbr:
+        elif klass.ps_class_nbr not in numbers:
             return jsonify({
                 'ok': False, 'mismatch': True,
                 'message': f'This bookmark is for "{klass.name}", linked to PeopleSoft '
