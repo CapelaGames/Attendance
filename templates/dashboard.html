@@ -7,6 +7,12 @@
     <div class="sub">Signed in as {{ current_user.email }}</div>
   </div>
   <div class="header-right">
+    {% if bookmarklet %}
+      <a href="{{ bookmarklet }}" class="btn primary" style="text-decoration:none;"
+         title="Drag this onto your bookmarks bar. One bookmark for every class — click it on any PeopleSoft roster."
+         onclick="alert('Drag this onto your bookmarks bar rather than clicking it here.\n\nThen click it while you are on a PeopleSoft class roster.'); return false;"
+        >Attendance → PeopleSoft</a>
+    {% endif %}
     {% if current_user.is_admin %}
       <a href="{{ url_for('admin_page') }}" class="btn">Admin</a>
     {% endif %}
@@ -37,37 +43,6 @@
       <button type="submit" class="btn primary" style="padding: 12px 18px;">Create</button>
     </form>
   </div>
-
-  {% if bookmarklet %}
-  <div class="card-panel" style="margin-bottom: 22px;">
-    <h2 style="font-size: 1.1rem; margin-bottom: 6px;">PeopleSoft bookmark — all classes</h2>
-    <p style="font-size: .82rem; color: var(--muted); margin-bottom: 14px;">
-      This one bookmark covers every class you teach. Drag it to your bookmarks bar, then
-      click it on any class roster — it works out which class that is from the roster itself,
-      so you don't need one bookmark per class.
-    </p>
-    <p style="margin-bottom: 12px;">
-      <a href="{{ bookmarklet }}" class="btn primary" style="text-decoration:none;"
-         onclick="alert('Drag this to your bookmarks bar rather than clicking it here.'); return false;"
-        >Attendance → PeopleSoft</a>
-    </p>
-    {% if unlinked %}
-      <p style="font-size: .82rem; color: var(--muted);">
-        For it to know where a roster belongs, each class needs linking once —
-        open the class, then <b>PeopleSoft</b>. Not linked yet:
-        {% for k in unlinked %}<a href="{{ url_for('sync_page', class_id=k.id) }}"
-          >{{ k.name }}</a>{{ ', ' if not loop.last }}{% endfor %}.
-      </p>
-    {% endif %}
-    <details style="margin-top: 10px;">
-      <summary style="cursor:pointer; font-size:.82rem; color: var(--muted);">
-        Add it by hand on a locked-down machine
-      </summary>
-      <textarea readonly rows="3" onclick="this.select()" style="width:100%; margin-top:8px;
-                font-family:monospace; font-size:.7rem;">{{ bookmarklet }}</textarea>
-    </details>
-  </div>
-  {% endif %}
 
   <h2 style="font-size: 1rem; color: var(--muted); margin-bottom: 12px;">Your classes</h2>
   {% if classes %}

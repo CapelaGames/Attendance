@@ -507,8 +507,7 @@ def dashboard():
         bridge = url_for('sync_bridge_all',
                          token=ensure_teacher_sync_token(current_user), _external=True)
         bookmarklet = bookmarklet_for(bridge)
-    return render_template('dashboard.html', classes=classes, bookmarklet=bookmarklet,
-                           unlinked=[k for k in classes if not k.ps_class_nbr])
+    return render_template('dashboard.html', classes=classes, bookmarklet=bookmarklet)
 
 
 @app.route('/classes', methods=['POST'])
@@ -722,9 +721,15 @@ def export_csv(class_id):
 @login_required
 def delete_class(class_id):
     klass = get_owned_class(class_id)
+    if request.form.get('confirm', '').strip().lower() != klass.name.strip().lower():
+        flash('Type the class name exactly to confirm deletion.', 'warn')
+        return redirect(url_for('manage_class', class_id=class_id))
+
+    name, students = klass.name, len(klass.students)
     SessionLocal.delete(klass)
     SessionLocal.commit()
-    flash('Class deleted.', 'ok')
+    flash(f'Deleted {name}, its {students} student'
+          f'{"" if students == 1 else "s"}, and all their attendance.', 'ok')
     return redirect(url_for('dashboard'))
 
 

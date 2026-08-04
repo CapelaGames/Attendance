@@ -72,5 +72,29 @@
       <a href="{{ url_for('view_class', class_id=klass.id) }}" class="btn primary" style="margin-top: 12px;">Go to class</a>
     </div>
   {% endif %}
+
+  <div class="card-panel" style="margin-top: 24px;">
+    <h2 style="font-size: 1rem; margin-bottom: 12px;">Delete this class</h2>
+    <details>
+      <summary style="cursor:pointer; color:var(--red,#c62828); font-size:.88rem;">
+        Delete {{ klass.name }}
+      </summary>
+      <p style="color: var(--muted); font-size: .82rem; margin: 10px 0;">
+        This permanently removes the class, its
+        {{ students|length }} student{{ '' if students|length == 1 else 's' }}, and every
+        attendance record for them. The student check-in link stops working. It cannot be
+        undone — export the CSV first if you might need it. Type the class name to confirm.
+      </p>
+      <form method="post" action="{{ url_for('delete_class', class_id=klass.id) }}"
+            style="display:flex; gap:8px; flex-wrap:wrap;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="confirm" placeholder="{{ klass.name }}" autocomplete="off"
+               style="flex:1; min-width:220px;">
+        <button class="btn" style="background:var(--red,#c62828); color:#fff;">
+          Delete permanently
+        </button>
+      </form>
+    </details>
+  </div>
 </div>
 {% endblock %}
