@@ -21,8 +21,9 @@ admin access can't be locked out by accident. Admins get an **Admin** button on 
 dashboard, leading to `/admin`, where you can:
 
 - see every account with its join date, class and student counts, and PeopleSoft status
-- **enable or disable PeopleSoft upload** per teacher — disabling hides the bookmarklet page
-  *and* makes any already-installed bookmark stop working, since the API checks too
+- **enable or disable PeopleSoft upload** per teacher — new accounts start **disabled** and
+  don't see the button at all until an admin turns it on. Disabling an account that had it
+  also makes any already-installed bookmark stop working, since the API checks too
 - promote or demote other admins
 - **delete an account**, which permanently removes its classes, students, and attendance
 

@@ -12,7 +12,9 @@
     <a href="{{ url_for('share_class', class_id=klass.id) }}" class="btn primary">Share / QR</a>
     <a href="{{ url_for('manage_class', class_id=klass.id) }}" class="btn">Manage roster</a>
     <a href="{{ url_for('class_sheet', class_id=klass.id) }}" class="btn">Full sheet</a>
-    <a href="{{ url_for('sync_page', class_id=klass.id) }}" class="btn">PeopleSoft</a>
+    {% if current_user.ps_upload_enabled %}
+      <a href="{{ url_for('sync_page', class_id=klass.id) }}" class="btn">PeopleSoft</a>
+    {% endif %}
     <a href="{{ url_for('dashboard') }}" class="btn">← Classes</a>
   </div>
 </header>

@@ -98,7 +98,8 @@ class Teacher(Base, UserMixin):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    ps_upload_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # New accounts start without PeopleSoft access; an admin turns it on.
+    ps_upload_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     classes: Mapped[list['Klass']] = relationship(
         back_populates='teacher', cascade='all, delete-orphan')
@@ -173,6 +174,8 @@ def add_missing_columns() -> None:
     """create_all() only creates missing tables, never alters existing ones."""
     added = {'klass': [('sync_token', 'VARCHAR(32)')],
              'student': [('emplid', 'VARCHAR(20)')],
+             # Accounts predating this column keep PeopleSoft access; only
+             # accounts created afterwards start disabled.
              'teacher': [('is_admin', 'BOOLEAN DEFAULT 0 NOT NULL'),
                          ('ps_upload_enabled', 'BOOLEAN DEFAULT 1 NOT NULL')]}
     insp = sa_inspect(engine)
