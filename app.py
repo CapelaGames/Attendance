@@ -815,8 +815,20 @@ def sync_page(class_id):
         return render_template('sync_disabled.html', klass=klass), 403
     bridge = url_for('sync_bridge', token=ensure_sync_token(klass), _external=True)
     missing = [s.name for s in sorted_students(klass) if not s.emplid]
-    return render_template('sync.html', klass=klass, missing=missing,
-                           bookmarklet=bookmarklet_for(bridge))
+
+    # The list for a chosen day, so there's a copy-paste path that doesn't
+    # depend on the popup reaching this app at all.
+    try:
+        day = date.fromisoformat(request.args.get('date', ''))
+    except ValueError:
+        day = date.today()
+    marked = present_ids(klass.id, day)
+    students = sorted_students(klass)
+    return render_template(
+        'sync.html', klass=klass, missing=missing, bookmarklet=bookmarklet_for(bridge),
+        day=day,
+        present_ids_list=[s.emplid for s in students if s.id in marked and s.emplid],
+        present_no_id=[s.name for s in students if s.id in marked and not s.emplid])
 
 
 @app.route('/api/sync/<token>/roster', methods=['POST'])

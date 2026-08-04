@@ -216,9 +216,10 @@
       window.removeEventListener('message', onMessage);
       pasteFallback(doc, rows, day,
         "TAFE's security settings stop the two windows talking to each other."
-        + '\n\nThe window that just opened has the ID list for ' + day
-        + ' and has already copied it to your clipboard.'
-        + '\n\nPress Ctrl+V here, then OK:');
+        + '\n\nA window or tab just opened showing the ID list for ' + day
+        + ', already copied to your clipboard. Press Ctrl+V here, then OK.'
+        + "\n\nIf you can't see it, open the class in your attendance app and copy"
+        + ' the list from the PeopleSoft page there:');
     }, 8000);
   }
 

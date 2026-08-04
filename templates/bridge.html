@@ -62,13 +62,16 @@
       return r.json();
     }
 
-    function showManually(emplids, note) {
+    /* Always shown. If the roster page also receives the postMessage it closes
+       this window itself — but we never assume that worked, because a silently
+       dropped message would otherwise leave nothing to copy. */
+    function showList(emplids, note, day) {
       idsEl.value = emplids.join(', ');
       manual.style.display = 'block';
       say(emplids.length
-        ? 'Could not reach the roster page automatically — copy the list below.'
-        : 'Nobody is marked present for that date in the attendance app.',
-        emplids.length ? 'err' : '');
+        ? emplids.length + ' present on ' + day + ' — paste this into the roster page.'
+        : 'Nobody is marked present for ' + day + ' in the attendance app.',
+        emplids.length ? '' : 'err');
       if (note) {
         var p = document.createElement('p');
         p.textContent = note;
@@ -79,7 +82,9 @@
       if (navigator.clipboard && emplids.length) {
         navigator.clipboard.writeText(idsEl.value).then(function () {
           document.getElementById('copied').textContent = 'Copied to clipboard.';
-        }, function () { });
+        }, function () {
+          document.getElementById('copied').textContent = 'Press Ctrl+C to copy.';
+        });
       }
     }
 
@@ -122,16 +127,11 @@
             if (data.missing_emplid && data.missing_emplid.length) {
               note += 'No ID yet for: ' + data.missing_emplid.join(', ') + '.';
             }
-            var sent = tell({
+            showList(data.emplids || [], note, payload.date);
+            tell({
               type: 'result', emplids: data.emplids || [],
               missing_emplid: data.missing_emplid || [], learn: learn
             });
-            if (sent) {
-              say('Done — check the roster page. This window closes itself.', 'ok');
-              setTimeout(function () { window.close(); }, 2500);
-            } else {
-              showManually(data.emplids || [], note);
-            }
           });
       }).catch(function (err) {
         var message = String(err.message || err);
