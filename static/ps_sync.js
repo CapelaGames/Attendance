@@ -149,10 +149,8 @@
     alert(msg);
   }
 
-  function pasteFallback(doc, rows, day, why) {
-    var raw = window.prompt(
-      'Could not reach the attendance app (' + why + ').\n\n' +
-      'Open your attendance app, copy the ID list for ' + day + ', and paste it here:', '');
+  function pasteFallback(doc, rows, day, lead) {
+    var raw = window.prompt(lead, '');
     if (!raw) { return; }
     var ids = raw.split(/[^0-9A-Za-z]+/).filter(function (s) { return s.length > 0; });
     apply(doc, rows, ids, day, 'Pasted manually.');
@@ -187,7 +185,10 @@
       JSON.stringify({ date: day, rows: sending }));
     var win = window.open(url, 'attendance_bridge', 'width=520,height=440');
     if (!win) {
-      pasteFallback(doc, rows, day, 'popup blocked — allow popups for this site');
+      pasteFallback(doc, rows, day,
+        'The popup was blocked — allow popups for this site and click the bookmark again.'
+        + '\n\nOr open your attendance app, copy the ID list for ' + day
+        + ', and paste it here:');
       return;
     }
 
@@ -213,8 +214,12 @@
       if (settled) { return; }
       settled = true;
       window.removeEventListener('message', onMessage);
-      pasteFallback(doc, rows, day, 'paste the list from the window that just opened');
-    }, 12000);
+      pasteFallback(doc, rows, day,
+        "TAFE's security settings stop the two windows talking to each other."
+        + '\n\nThe window that just opened has the ID list for ' + day
+        + ' and has already copied it to your clipboard.'
+        + '\n\nPress Ctrl+V here, then OK:');
+    }, 8000);
   }
 
   var docs = allDocs();
