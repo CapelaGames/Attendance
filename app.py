@@ -114,6 +114,10 @@ class Klass(Base):
     # Separate from public_token: the QR link is handed to students, but the sync
     # endpoints expose student IDs, so they get their own secret.
     sync_token: Mapped[str | None] = mapped_column(String(32), unique=True)
+    # The PeopleSoft class this one syncs with, learned on first use, so a
+    # bookmark can't be run against a different class's roster.
+    ps_class_nbr: Mapped[str | None] = mapped_column(String(20))
+    ps_label: Mapped[str | None] = mapped_column(String(200))
     self_mark_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     teacher: Mapped[Teacher] = relationship(back_populates='classes')
@@ -172,7 +176,8 @@ Base.metadata.create_all(engine)
 
 def add_missing_columns() -> None:
     """create_all() only creates missing tables, never alters existing ones."""
-    added = {'klass': [('sync_token', 'VARCHAR(32)')],
+    added = {'klass': [('sync_token', 'VARCHAR(32)'),
+                       ('ps_class_nbr', 'VARCHAR(20)'), ('ps_label', 'VARCHAR(200)')],
              'student': [('emplid', 'VARCHAR(20)')],
              # Accounts predating this column keep PeopleSoft access; only
              # accounts created afterwards start disabled.
@@ -853,12 +858,41 @@ def sync_page(class_id):
         present_no_id=[s.name for s in students if s.id in marked and not s.emplid])
 
 
+@app.route('/classes/<int:class_id>/unlink-peoplesoft', methods=['POST'])
+@login_required
+def unlink_peoplesoft(class_id):
+    klass = get_owned_class(class_id)
+    klass.ps_class_nbr = None
+    klass.ps_label = None
+    SessionLocal.commit()
+    flash('Unlinked. The next sync will link this class to whichever roster you run it on.',
+          'ok')
+    return redirect(url_for('sync_page', class_id=class_id))
+
+
 @app.route('/api/sync/<token>/roster', methods=['POST'])
 @csrf.exempt
 def api_sync_roster(token):
     """Learn EMPLID -> student from the roster grid the bookmarklet scraped."""
     klass = get_class_by_sync_token(token)
     body = request.get_json(force=True, silent=True) or {}
+
+    # Refuse to touch a roster belonging to a different PeopleSoft class: a
+    # student enrolled in two of them would otherwise be marked on the wrong one.
+    class_nbr = str(body.get('class_nbr') or '').strip()
+    if class_nbr:
+        if not klass.ps_class_nbr:
+            klass.ps_class_nbr = class_nbr
+            klass.ps_label = (str(body.get('label') or '').strip() or None)
+            SessionLocal.commit()
+        elif klass.ps_class_nbr != class_nbr:
+            return jsonify({
+                'ok': False, 'mismatch': True,
+                'message': f'This bookmark is for "{klass.name}", linked to PeopleSoft '
+                           f'class {klass.ps_class_nbr}. The roster on screen is class '
+                           f'{class_nbr}. Open that class in your attendance app and use '
+                           f'its own bookmark.',
+            }), 409
 
     index = name_index(klass)
     learned, unknown, conflicts = 0, [], []

@@ -58,6 +58,11 @@
     }
 
     function asJson(r) {
+      if (r.status === 409) {
+        return r.json().then(function (j) {
+          throw new Error(j.message || 'That roster belongs to a different class.');
+        });
+      }
       if (!r.ok) { throw new Error('HTTP ' + r.status + ' from the attendance app'); }
       return r.json();
     }
@@ -113,7 +118,10 @@
       fetch(API + '/roster', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: payload.rows || [] })
+        body: JSON.stringify({
+          rows: payload.rows || [], class_nbr: payload.class_nbr || '',
+          strm: payload.strm || '', label: payload.label || ''
+        })
       }).then(asJson).then(function (learn) {
         return fetch(API + '/present?date=' + encodeURIComponent(payload.date))
           .then(asJson).then(function (data) {

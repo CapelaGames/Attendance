@@ -88,6 +88,29 @@
     return out;
   }
 
+  /* Which PeopleSoft class this roster is. The page publishes it as
+     PIA_KEYSTRUCT; the URL carries it too if that isn't there. */
+  function classKeys(doc) {
+    var win = doc.defaultView || window;
+    var keys = null, out = {}, href = '';
+    try { keys = win.PIA_KEYSTRUCT; } catch (e) { keys = null; }
+    try { href = win.location.href; } catch (e) { href = ''; }
+
+    if (keys && keys.CLASS_NBR) {
+      out.class_nbr = String(keys.CLASS_NBR);
+      if (keys.STRM) { out.strm = String(keys.STRM); }
+    } else {
+      var m = /[?&]CLASS_NBR=(\w+)/i.exec(href) || /[?&]CLASS_NBR=(\w+)/i.exec(doc.referrer || '');
+      if (m) { out.class_nbr = m[1]; }
+    }
+    var head = doc.getElementById('win0divRX_AT_HEADER_HTMLAREA1');
+    if (head) {
+      var label = (head.textContent || '').replace(/\s+/g, ' ').trim();
+      if (label) { out.label = label.slice(0, 120); }
+    }
+    return out;
+  }
+
   function meetingDate(doc) {
     var d = doc.querySelectorAll('[id^="' + DATE + '"]');
     for (var i = 0; i < d.length; i++) {
@@ -240,8 +263,11 @@
     for (var i = 0; i < rows.length; i++) {
       sending.push({ emplid: rows[i].emplid, cells: rows[i].cells });
     }
-    var url = BRIDGE + '?p=' + encodeURIComponent(
-      JSON.stringify({ date: day, rows: sending }));
+    var keys = classKeys(doc);
+    var url = BRIDGE + '?p=' + encodeURIComponent(JSON.stringify({
+      date: day, rows: sending,
+      class_nbr: keys.class_nbr || '', strm: keys.strm || '', label: keys.label || ''
+    }));
     var win = window.open(url, 'attendance_bridge', 'width=520,height=440');
     var settled = false;
     function onMessage(e) {

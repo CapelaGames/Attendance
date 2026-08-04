@@ -133,6 +133,33 @@
   </div>
 
   <div class="card-panel" style="margin-top: 18px;">
+    <h2 style="font-size: 1rem; margin-bottom: 12px;">Which PeopleSoft class</h2>
+    {% if klass.ps_class_nbr %}
+      <p style="color: var(--muted); font-size: .88rem;">
+        Linked to PeopleSoft class <b>{{ klass.ps_class_nbr }}</b>{% if klass.ps_label %}
+        — {{ klass.ps_label }}{% endif %}. If you run this bookmark on a different class's
+        roster it will refuse rather than mark the wrong students, which matters when you
+        teach two classes on the same day.
+      </p>
+      <form method="post" action="{{ url_for('unlink_peoplesoft', class_id=klass.id) }}"
+            style="margin-top: 12px;"
+            onsubmit="return confirm('Unlink this class from PeopleSoft class {{ klass.ps_class_nbr }}?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn">Unlink</button>
+        <span style="color: var(--muted); font-size: .82rem; margin-left: 8px;">
+          Only needed if this class moves to a different PeopleSoft class, e.g. a new term.
+        </span>
+      </form>
+    {% else %}
+      <p style="color: var(--muted); font-size: .88rem;">
+        Not linked yet. The first time you run the bookmark, this class is tied to whichever
+        PeopleSoft roster you run it on — after that, running it on a different class's
+        roster is refused instead of marking the wrong students.
+      </p>
+    {% endif %}
+  </div>
+
+  <div class="card-panel" style="margin-top: 18px;">
     <h2 style="font-size: 1rem; margin-bottom: 12px;">Keep this link private</h2>
     <p style="color: var(--muted); font-size: .88rem;">
       The bookmark contains a secret token for this class and can read your students'

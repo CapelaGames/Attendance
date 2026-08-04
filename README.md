@@ -40,6 +40,12 @@ Open a class roster in PeopleSoft, click the bookmark, and it ticks everyone thi
 marked present for that meeting's date, then reports what it did. **It never clicks Save** —
 you review the grid and submit yourself.
 
+Each class is tied to a PeopleSoft class the first time you run its bookmark, using the
+`CLASS_NBR` the roster page publishes. Run that bookmark on a different class's roster and
+it refuses instead of marking anyone — which matters when you teach two classes on the same
+day and a student is enrolled in both. The sync page shows the link and can unlink it, which
+you'd only need when a class moves to a different PeopleSoft class, e.g. a new term.
+
 Students are matched by PeopleSoft EMPLID, not by name. IDs are learned automatically the
 first time you run the bookmark on a roster: it reads `RX_AT_ROST_GRID_EMPLID` from the grid
 and pairs each one with a student whose name or alias matches exactly (handling PeopleSoft's
