@@ -792,12 +792,19 @@ def sync_cors(resp):
     return resp
 
 
-def bookmarklet_for(api_base: str) -> str:
+def bookmarklet_for(bridge_url: str) -> str:
     """Inline the sync script into a javascript: URL — CSP blocks loading it remotely."""
     src = (Path(app.static_folder) / 'ps_sync.js').read_text()
     body = ' '.join(line.strip() for line in src.splitlines() if line.strip())
-    return 'javascript:' + quote(body.replace('__API__', api_base),
+    return 'javascript:' + quote(body.replace('__BRIDGE__', bridge_url),
                                  safe="!$&'()*+,-./:;=?@_~")
+
+
+@app.route('/sync/<token>/bridge')
+def sync_bridge(token):
+    """Same-origin helper window the bookmarklet talks to over postMessage."""
+    get_class_by_sync_token(token)
+    return render_template('bridge.html', token=token, ps_origin=PS_ORIGIN)
 
 
 @app.route('/classes/<int:class_id>/sync')
@@ -806,11 +813,10 @@ def sync_page(class_id):
     klass = get_owned_class(class_id)
     if not current_user.ps_upload_enabled:
         return render_template('sync_disabled.html', klass=klass), 403
-    api_base = url_for('api_sync_present', token=ensure_sync_token(klass),
-                       _external=True).rsplit('/', 1)[0]
+    bridge = url_for('sync_bridge', token=ensure_sync_token(klass), _external=True)
     missing = [s.name for s in sorted_students(klass) if not s.emplid]
     return render_template('sync.html', klass=klass, missing=missing,
-                           bookmarklet=bookmarklet_for(api_base))
+                           bookmarklet=bookmarklet_for(bridge))
 
 
 @app.route('/api/sync/<token>/roster', methods=['POST'])

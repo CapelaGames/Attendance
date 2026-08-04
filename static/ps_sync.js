@@ -6,7 +6,8 @@
  * __API__ is substituted with the class's sync endpoint base before serving.
  */
 (function () {
-  var API = '__API__';
+  var BRIDGE = '__BRIDGE__';
+  var APP = BRIDGE.split('/').slice(0, 3).join('/');
   var EMPLID = 'RX_AT_ROST_GRID_EMPLID$';
   var ATTEND = 'RX_AT_ROST_GRID_RX_ATTENDANCE$';
   var DATE = 'CLASS_ATTENDNCE_CLASS_ATTEND_DT$';
@@ -139,13 +140,64 @@
     alert(msg);
   }
 
-  function pasteFallback(doc, rows, day) {
+  function pasteFallback(doc, rows, day, why) {
     var raw = window.prompt(
-      'Could not reach the attendance app from this page.\n\n' +
+      'Could not reach the attendance app (' + why + ').\n\n' +
       'Open your attendance app, copy the ID list for ' + day + ', and paste it here:', '');
     if (!raw) { return; }
     var ids = raw.split(/[^0-9A-Za-z]+/).filter(function (s) { return s.length > 0; });
     apply(doc, rows, ids, day, 'Pasted manually.');
+  }
+
+  function noteFrom(msg) {
+    var learn = msg.learn || {};
+    var note = '';
+    if (learn.unknown && learn.unknown.length) {
+      note += learn.unknown.length + ' student(s) on this roster are not in your app.';
+    }
+    if (learn.conflicts && learn.conflicts.length) {
+      note += (note ? '\n' : '') + 'ID conflicts: ' + learn.conflicts.join(', ');
+    }
+    if (msg.missing_emplid && msg.missing_emplid.length) {
+      note += (note ? '\n' : '') + 'No ID yet for: ' + msg.missing_emplid.join(', ');
+    }
+    return note;
+  }
+
+  /* The TAFE page's CSP blocks fetch() to another origin, so we hand the work to
+     a popup on the app's own domain and exchange postMessage, which CSP allows. */
+  function viaBridge(doc, rows, day) {
+    var win = window.open(BRIDGE, 'attendance_bridge', 'width=460,height=300');
+    if (!win) {
+      pasteFallback(doc, rows, day, 'popup blocked — allow popups for this site');
+      return;
+    }
+
+    var settled = false;
+    function finish() {
+      settled = true;
+      window.removeEventListener('message', onMessage);
+      try { win.close(); } catch (e) { }
+    }
+    function onMessage(e) {
+      if (e.origin !== APP || settled) { return; }
+      var msg = e.data || {};
+      if (msg.type === 'ready') {
+        win.postMessage({ type: 'sync', rows: rows, date: day }, APP);
+      } else if (msg.type === 'result') {
+        finish();
+        apply(doc, rows, msg.emplids || [], day, noteFrom(msg));
+      } else if (msg.type === 'error') {
+        finish();
+        alert('The attendance app reported: ' + msg.message + '\n\nNothing was changed.');
+      }
+    }
+    window.addEventListener('message', onMessage);
+    window.setTimeout(function () {
+      if (settled) { return; }
+      finish();
+      pasteFallback(doc, rows, day, 'no reply from the app');
+    }, 20000);
   }
 
   var docs = allDocs();
@@ -165,29 +217,5 @@
   if (!day) { day = window.prompt('Could not read the meeting date. Enter it as YYYY-MM-DD:', ''); }
   if (!day) { return; }
 
-  fetch(API + '/roster', {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ rows: rows })
-  }).then(function (r) {
-    return r.json();
-  }).then(function (learn) {
-    return fetch(API + '/present?date=' + encodeURIComponent(day)).then(function (r) {
-      return r.json();
-    }).then(function (data) {
-      var note = '';
-      if (learn && learn.unknown && learn.unknown.length) {
-        note += learn.unknown.length + ' student(s) on this roster are not in your app.';
-      }
-      if (learn && learn.conflicts && learn.conflicts.length) {
-        note += (note ? '\n' : '') + 'ID conflicts: ' + learn.conflicts.join(', ');
-      }
-      if (data && data.missing_emplid && data.missing_emplid.length) {
-        note += (note ? '\n' : '') + 'No ID yet for: ' + data.missing_emplid.join(', ');
-      }
-      apply(doc, rows, (data && data.emplids) || [], day, note);
-    });
-  }).catch(function () {
-    pasteFallback(doc, rows, day);
-  });
+  viaBridge(doc, rows, day);
 })();

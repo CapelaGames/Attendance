@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Attendance sync</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; margin: 0; padding: 28px 24px;
+           color: #222; background: #fff; }
+    h1 { font-size: 15px; margin: 0 0 10px; }
+    p { margin: 0 0 8px; color: #666; font-size: 13px; }
+    .err { color: #c62828; }
+  </style>
+</head>
+<body>
+  <h1>Attendance sync</h1>
+  <p id="status">Talking to the roster page…</p>
+  <p>This window closes by itself.</p>
+
+  <script>
+    /* The TAFE page's CSP blocks it from calling this app directly, so the
+       bookmarklet opens this window instead and we exchange postMessage. */
+    var PS = {{ ps_origin|tojson }};
+    var API = {{ ('/api/sync/' + token)|tojson }};
+    var status = document.getElementById('status');
+
+    function say(text, isError) {
+      status.textContent = text;
+      status.className = isError ? 'err' : '';
+    }
+
+    function reply(target, payload) {
+      try { target.postMessage(payload, PS); } catch (e) { say(String(e), true); }
+    }
+
+    function asJson(r) {
+      if (!r.ok) { throw new Error('HTTP ' + r.status + ' from the attendance app'); }
+      return r.json();
+    }
+
+    window.addEventListener('message', function (e) {
+      if (e.origin !== PS) { return; }
+      var msg = e.data || {};
+      if (msg.type !== 'sync') { return; }
+
+      say('Matching students…');
+      fetch(API + '/roster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: msg.rows })
+      }).then(asJson).then(function (learn) {
+        return fetch(API + '/present?date=' + encodeURIComponent(msg.date))
+          .then(asJson).then(function (data) {
+            say('Done — check the roster page.');
+            reply(e.source, {
+              type: 'result',
+              emplids: data.emplids || [],
+              missing_emplid: data.missing_emplid || [],
+              learn: learn
+            });
+          });
+      }).catch(function (err) {
+        say(String(err.message || err), true);
+        reply(e.source, { type: 'error', message: String(err.message || err) });
+      });
+    });
+
+    if (window.opener) {
+      reply(window.opener, { type: 'ready' });
+    } else {
+      say('Open this from the bookmarklet on a PeopleSoft roster page.', true);
+    }
+  </script>
+</body>
+</html>
