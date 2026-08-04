@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Share {{ klass.name }} — Attendance{% endblock %}
+{% block body %}
+<header>
+  <div class="brand">
+    <h1>{{ klass.name }}</h1>
+    <div class="sub">Student check-in link &amp; QR code</div>
+  </div>
+  <div class="header-right">
+    <a href="{{ url_for('view_class', class_id=klass.id) }}" class="btn">← Back to class</a>
+  </div>
+</header>
+
+<div class="flash-wrap">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+</div>
+
+<div class="container">
+  <div class="card-panel" style="text-align:center;">
+    <p style="color: var(--muted); font-size: .88rem; margin-bottom: 18px;">
+      Students scan this to mark themselves present. Show it on screen or print it.
+    </p>
+    <div style="background:#fff; display:inline-block; padding:16px; border-radius:14px;">
+      {{ qr_svg|safe }}
+    </div>
+    <div style="margin-top: 22px; display:flex; gap:8px; align-items:center;">
+      <input type="text" id="link" value="{{ link }}" readonly onclick="this.select()">
+      <button class="btn primary" onclick="copyLink()" style="white-space:nowrap;">Copy link</button>
+    </div>
+    {% if not klass.self_mark_enabled %}
+      <p style="color: var(--red); font-size: .85rem; margin-top: 16px;">
+        Self check-in is currently <b>disabled</b> — students can't mark via this link until you enable it.
+      </p>
+    {% endif %}
+  </div>
+
+  <div class="card-panel" style="margin-top: 18px;">
+    <h2 style="font-size: 1rem; margin-bottom: 12px;">Controls</h2>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <form method="post" action="{{ url_for('toggle_self_mark', class_id=klass.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn">
+          {{ 'Close self check-in' if klass.self_mark_enabled else 'Open self check-in' }}
+        </button>
+      </form>
+      <form method="post" action="{{ url_for('regenerate_token', class_id=klass.id) }}"
+            onsubmit="return confirm('Generate a new link? The current QR / link will stop working.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn danger">Regenerate link</button>
+      </form>
+    </div>
+    <p style="color: var(--muted); font-size: .8rem; margin-top: 12px;">
+      Regenerating invalidates the old QR — use it if a link leaks or a term ends.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function copyLink() {
+    const el = document.getElementById('link');
+    el.select();
+    navigator.clipboard.writeText(el.value).then(() => {
+      const t = document.getElementById('toast');
+      t.textContent = '✓  Link copied';
+      t.className = 'show';
+      setTimeout(() => { t.className = ''; }, 2000);
+    });
+  }
+</script>
+{% endblock %}

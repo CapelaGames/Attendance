@@ -1,0 +1,24 @@
+# Fly.io config. `app` must be globally unique. Region `syd` = Sydney.
+# Storage: SQLite on a persistent volume mounted at /data (cheapest durable option).
+app = "class-attendance"
+primary_region = "syd"
+
+[build]
+
+[env]
+  DATABASE_URL = "sqlite:////data/app.db"
+
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

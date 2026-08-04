@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Your classes — Attendance{% endblock %}
+{% block body %}
+<header>
+  <div class="brand">
+    <h1>Attendance</h1>
+    <div class="sub">Signed in as {{ current_user.email }}</div>
+  </div>
+  <div class="header-right">
+    <form method="post" action="{{ url_for('logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn">Sign out</button>
+    </form>
+  </div>
+</header>
+
+<div class="flash-wrap">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+</div>
+
+<div class="container">
+  <div class="card-panel" style="margin-bottom: 22px;">
+    <h2 style="font-size: 1.1rem; margin-bottom: 6px;">Create a class</h2>
+    <p style="font-size: .82rem; color: var(--muted); margin-bottom: 14px;">
+      Each class gets its own QR check-in link for students.
+    </p>
+    <form method="post" action="{{ url_for('create_class') }}" style="display:flex; gap:10px; align-items:flex-end;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="flex:1;">
+        <input type="text" name="name" placeholder="e.g. Cert III Networking — Tuesday" required>
+      </div>
+      <button type="submit" class="btn primary" style="padding: 12px 18px;">Create</button>
+    </form>
+  </div>
+
+  <h2 style="font-size: 1rem; color: var(--muted); margin-bottom: 12px;">Your classes</h2>
+  {% if classes %}
+    {% for k in classes %}
+    <a href="{{ url_for('view_class', class_id=k.id) }}" class="card-panel"
+       style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; text-decoration:none;">
+      <div>
+        <div style="font-size: 1.05rem; font-weight: 600; color: var(--text);">{{ k.name }}</div>
+        <div style="font-size: .8rem; color: var(--muted); margin-top: 3px;">
+          {{ k.students|length }} student{{ '' if k.students|length == 1 else 's' }}
+          {% if not k.self_mark_enabled %}· <span style="color:var(--red)">check-in closed</span>{% endif %}
+        </div>
+      </div>
+      <span class="btn">Open →</span>
+    </a>
+    {% endfor %}
+  {% else %}
+    <div class="empty"><p>No classes yet — create one above to get started.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

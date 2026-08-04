@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Attendance{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --border: #2a2e3f; --accent: #4f8ef7;
+      --green-bg: #0a2118; --green-border: #2ea84a; --green-text: #5dde80;
+      --text: #e8eaf0; --muted: #6b7280; --red: #f87171;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    a { color: var(--accent); text-decoration: none; }
+
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 16px 28px; display: flex; align-items: center;
+      justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    }
+    .brand h1 { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+    .brand .sub { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+    .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .date-pill {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 7px 14px; font-size: 0.95rem; font-weight: 600;
+    }
+
+    .btn {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: 7px 13px; font-size: 0.82rem; cursor: pointer;
+      text-decoration: none; transition: border-color .15s, color .15s;
+      font-family: inherit; display: inline-block;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.primary { border-color: var(--accent); color: var(--accent); }
+    .btn.danger:hover { border-color: var(--red); color: var(--red); }
+
+    input[type="text"], input[type="email"], input[type="password"],
+    input[type="search"], textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 0.95rem;
+      font-family: inherit; padding: 12px 14px; outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    label { display: block; font-size: 0.82rem; color: var(--muted); margin: 14px 0 6px; }
+
+    .flash-wrap { padding: 12px 28px 0; }
+    .flash {
+      border-radius: 10px; padding: 11px 16px; font-size: 0.88rem; margin-bottom: 8px;
+      border: 1px solid var(--border);
+    }
+    .flash.ok { background: var(--green-bg); border-color: var(--green-border); color: var(--green-text); }
+    .flash.warn { background: #1a1020; border-color: #7c4dff; color: #b39ddb; }
+
+    .container { max-width: 640px; margin: 0 auto; padding: 40px 24px; }
+    .card-panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px;
+    }
+
+    /* Kiosk grid (shared by teacher class page + public mark page) */
+    .search-wrap { padding: 20px 28px 8px; }
+    .stats { padding: 8px 28px; font-size: 0.85rem; color: var(--muted); min-height: 28px; }
+    .stats b { color: var(--green-text); }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px; padding: 8px 28px 36px;
+    }
+    .kcard {
+      background: var(--surface); border: 2px solid var(--border); border-radius: 14px;
+      padding: 22px 14px 18px; cursor: pointer; text-align: center; user-select: none;
+      transition: transform .12s, border-color .15s, background .2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .kcard:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .kcard:active { transform: scale(.96); }
+    .kcard.present { background: var(--green-bg); border-color: var(--green-border); }
+    .kcard-icon { font-size: 1.8rem; margin-bottom: 9px; }
+    .kcard-name { font-size: 1rem; font-weight: 600; line-height: 1.3; margin-bottom: 5px; }
+    .kcard-status { font-size: 0.78rem; font-weight: 500; }
+    .kcard:not(.present) .kcard-status { color: var(--muted); }
+    .kcard.present .kcard-status { color: var(--green-text); }
+    .no-results { display: none; grid-column: 1/-1; text-align: center; padding: 50px 20px; color: var(--muted); }
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty h2 { font-size: 1.2rem; margin-bottom: 10px; color: var(--text); }
+
+    /* Modal panel */
+    .overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      z-index: 50; align-items: center; justify-content: center; padding: 20px;
+    }
+    .overlay.open { display: flex; }
+    .panel-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px; width: 100%; max-width: 480px;
+    }
+    .panel-box h2 { font-size: 1.1rem; margin-bottom: 8px; }
+    .panel-box p { font-size: 0.82rem; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+    .panel-box textarea { height: 180px; resize: vertical; }
+    .panel-actions { display: flex; gap: 10px; margin-top: 14px; justify-content: flex-end; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(70px);
+      background: var(--green-bg); border: 1px solid var(--green-border);
+      color: var(--green-text); padding: 13px 26px; border-radius: 12px;
+      font-size: 1rem; font-weight: 600;
+      transition: transform .28s cubic-bezier(.34,1.56,.64,1), opacity .25s;
+      opacity: 0; z-index: 100; white-space: nowrap; pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.warn { background: #1a1020; border-color: #7c4dff; color: #b39ddb; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% block body %}{% endblock %}
+  <div id="toast"></div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

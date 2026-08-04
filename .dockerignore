@@ -1,0 +1,13 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+.venv/
+local.db
+*.csv
+!example_attendance.csv
+.DS_Store
+Thumbs.db
+README.md
+start.sh
+index.html

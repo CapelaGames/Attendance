@@ -1,0 +1,7 @@
+Flask==3.0.3
+Flask-Login==0.6.3
+Flask-WTF==1.2.1
+SQLAlchemy==2.0.35
+gunicorn==22.0.0
+psycopg[binary]==3.2.3
+segno==1.6.1

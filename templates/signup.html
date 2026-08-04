@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Create account — Attendance{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="card-panel">
+    <div class="brand" style="margin-bottom: 20px;">
+      <h1 style="color: var(--accent); font-size: 1.6rem;">Create teacher account</h1>
+      <div class="sub" style="color: var(--muted); font-size: .85rem; margin-top: 4px;">A signup code is required.</div>
+    </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    <form method="post" action="{{ url_for('signup') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" autocomplete="username" required>
+      <label for="password">Password <span style="color:var(--muted)">(min 8 characters)</span></label>
+      <input type="password" id="password" name="password" autocomplete="new-password" required>
+      <label for="code">Signup code</label>
+      <input type="text" id="code" name="code" autocomplete="off" required>
+      <button type="submit" class="btn primary" style="margin-top: 22px; width: 100%; padding: 12px;">Create account</button>
+    </form>
+    <p style="margin-top: 18px; font-size: .85rem; color: var(--muted);">
+      Already have an account? <a href="{{ url_for('login') }}">Sign in</a>.
+    </p>
+  </div>
+</div>
+{% endblock %}

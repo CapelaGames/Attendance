@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Sign in — Attendance{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="card-panel">
+    <div class="brand" style="margin-bottom: 20px;">
+      <h1 style="color: var(--accent); font-size: 1.6rem;">Attendance</h1>
+      <div class="sub" style="color: var(--muted); font-size: .85rem; margin-top: 4px;">Teacher sign in</div>
+    </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    <form method="post" action="{{ url_for('login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+      <button type="submit" class="btn primary" style="margin-top: 22px; width: 100%; padding: 12px;">Sign in</button>
+    </form>
+    <p style="margin-top: 18px; font-size: .85rem; color: var(--muted);">
+      No account? <a href="{{ url_for('signup') }}">Create one</a> (you'll need a signup code).
+    </p>
+  </div>
+</div>
+{% endblock %}

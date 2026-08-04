@@ -8,6 +8,10 @@ __pycache__/
 *.pyc
 .venv/
 
+# Local dev database (SQLite fallback)
+local.db
+*.sqlite
+
 # OS
 .DS_Store
 Thumbs.db

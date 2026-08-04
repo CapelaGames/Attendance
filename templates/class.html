@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ klass.name }} — Attendance{% endblock %}
+{% block body %}
+<header>
+  <div class="brand">
+    <h1>{{ klass.name }}</h1>
+    <div class="sub">Tap a name to mark present · teacher view</div>
+  </div>
+  <div class="header-right">
+    <div class="date-pill">{{ today }}</div>
+    <button class="btn" onclick="openAdd()">+ Add students</button>
+    <a href="{{ url_for('share_class', class_id=klass.id) }}" class="btn primary">Share / QR</a>
+    <a href="{{ url_for('class_sheet', class_id=klass.id) }}" class="btn">Full sheet</a>
+    <a href="{{ url_for('dashboard') }}" class="btn">← Classes</a>
+  </div>
+</header>
+
+<div class="flash-wrap">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+</div>
+
+<div class="search-wrap">
+  <input type="search" id="search" placeholder="Search a name…" autocomplete="off">
+</div>
+<div class="stats" id="stats"></div>
+<div class="grid" id="grid"></div>
+
+<!-- Add students -->
+<div class="overlay" id="add-panel">
+  <div class="panel-box">
+    <h2>Add students</h2>
+    <p>Paste or type names, one per line. Names already in the list are skipped.</p>
+    <form method="post" action="{{ url_for('add_students', class_id=klass.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <textarea name="names" placeholder="Jane Smith&#10;John Doe&#10;..."></textarea>
+      <div class="panel-actions">
+        <button type="button" class="btn" onclick="closeAdd()">Cancel</button>
+        <button type="submit" class="btn primary">Add to class</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script id="init-state" type="application/json">{{ {'students': students}|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const MARK_URL = "{{ url_for('api_class_mark', class_id=klass.id) }}";
+  const CSRF = document.querySelector('meta[name=csrf-token]').content;
+  const state = JSON.parse(document.getElementById('init-state').textContent);
+</script>
+<script src="{{ url_for('static', filename='kiosk.js') }}"></script>
+<script>
+  function openAdd() { document.getElementById('add-panel').classList.add('open'); }
+  function closeAdd() { document.getElementById('add-panel').classList.remove('open'); }
+  document.getElementById('add-panel').addEventListener('click', e => {
+    if (e.target.id === 'add-panel') closeAdd();
+  });
+</script>
+{% endblock %}
