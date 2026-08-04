@@ -109,6 +109,8 @@ class Klass(Base):
     teacher: Mapped[Teacher] = relationship(back_populates='classes')
     students: Mapped[list['Student']] = relationship(
         back_populates='klass', cascade='all, delete-orphan')
+    pending: Mapped[list['PendingCheckin']] = relationship(
+        back_populates='klass', cascade='all, delete-orphan')
 
 
 class Student(Base):
@@ -120,6 +122,8 @@ class Student(Base):
     klass: Mapped[Klass] = relationship(back_populates='students')
     attendance: Mapped[list['Attendance']] = relationship(
         back_populates='student', cascade='all, delete-orphan')
+    aliases: Mapped[list['Alias']] = relationship(
+        back_populates='student', cascade='all, delete-orphan')
 
 
 class Attendance(Base):
@@ -130,6 +134,26 @@ class Attendance(Base):
     day: Mapped[date] = mapped_column(Date, nullable=False)
     marked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     student: Mapped[Student] = relationship(back_populates='attendance')
+
+
+class Alias(Base):
+    """An alternate name that resolves to a student (e.g. 'Rob' -> 'Robert Smith')."""
+    __tablename__ = 'alias'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey('student.id'), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    student: Mapped[Student] = relationship(back_populates='aliases')
+
+
+class PendingCheckin(Base):
+    """A self check-in whose typed name matched no student — awaits teacher action."""
+    __tablename__ = 'pending_checkin'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    class_id: Mapped[int] = mapped_column(ForeignKey('klass.id'), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    klass: Mapped[Klass] = relationship(back_populates='pending')
 
 
 Base.metadata.create_all(engine)
@@ -216,6 +240,20 @@ def set_present(klass: Klass, student_id: int, day: date) -> bool:
         SessionLocal.add(Attendance(student_id=student_id, day=day))
         SessionLocal.commit()
     return True
+
+
+def find_student(klass: Klass, typed: str) -> Student | None:
+    """Resolve a typed name to a student by exact name or alias (case-insensitive)."""
+    key = typed.strip().lower()
+    if not key:
+        return None
+    for s in klass.students:
+        if s.name.strip().lower() == key:
+            return s
+    for s in klass.students:
+        if any(a.name.strip().lower() == key for a in s.aliases):
+            return s
+    return None
 
 
 def add_names(klass: Klass, names: list[str]) -> list[str]:
@@ -336,7 +374,16 @@ def create_class():
 @login_required
 def view_class(class_id):
     klass = get_owned_class(class_id)
-    return render_template('class.html', klass=klass, **state_payload(klass))
+    pending = sorted(klass.pending, key=lambda p: (p.day, p.name.lower()))
+    return render_template('class.html', klass=klass, pending=pending,
+                           **state_payload(klass))
+
+
+@app.route('/classes/<int:class_id>/manage')
+@login_required
+def manage_class(class_id):
+    klass = get_owned_class(class_id)
+    return render_template('manage.html', klass=klass, students=sorted_students(klass))
 
 
 @app.route('/classes/<int:class_id>/students', methods=['POST'])
@@ -346,6 +393,98 @@ def add_students(class_id):
     raw = request.form.get('names', '')
     added = add_names(klass, raw.splitlines())
     flash(f'Added {len(added)} student{"s" if len(added) != 1 else ""}.', 'ok')
+    return redirect(url_for('view_class', class_id=class_id))
+
+
+@app.route('/classes/<int:class_id>/students/<int:sid>/rename', methods=['POST'])
+@login_required
+def rename_student(class_id, sid):
+    klass = get_owned_class(class_id)
+    student = _get_student(klass, sid)
+    name = request.form.get('name', '').strip()
+    if name:
+        student.name = name
+        SessionLocal.commit()
+        flash('Renamed to ' + name + '.', 'ok')
+    return redirect(url_for('manage_class', class_id=class_id))
+
+
+@app.route('/classes/<int:class_id>/students/<int:sid>/delete', methods=['POST'])
+@login_required
+def delete_student(class_id, sid):
+    klass = get_owned_class(class_id)
+    student = _get_student(klass, sid)
+    name = student.name
+    SessionLocal.delete(student)
+    SessionLocal.commit()
+    flash('Deleted ' + name + '.', 'ok')
+    return redirect(url_for('manage_class', class_id=class_id))
+
+
+@app.route('/classes/<int:class_id>/aliases/<int:aid>/delete', methods=['POST'])
+@login_required
+def delete_alias(class_id, aid):
+    klass = get_owned_class(class_id)
+    alias = SessionLocal.get(Alias, aid)
+    if alias is None or alias.student.class_id != klass.id:
+        abort(404)
+    SessionLocal.delete(alias)
+    SessionLocal.commit()
+    flash('Alias removed.', 'ok')
+    return redirect(url_for('manage_class', class_id=class_id))
+
+
+def _get_pending(klass: Klass, pid: int) -> PendingCheckin:
+    pc = SessionLocal.get(PendingCheckin, pid)
+    if pc is None or pc.class_id != klass.id:
+        abort(404)
+    return pc
+
+
+@app.route('/classes/<int:class_id>/pending/<int:pid>/create', methods=['POST'])
+@login_required
+def pending_create(class_id, pid):
+    klass = get_owned_class(class_id)
+    pc = _get_pending(klass, pid)
+    name = request.form.get('name', '').strip() or pc.name
+    day = pc.day
+    student = next((s for s in klass.students
+                    if s.name.strip().lower() == name.lower()), None)
+    if student is None:
+        student = Student(class_id=klass.id, name=name)
+        SessionLocal.add(student)
+        SessionLocal.flush()
+    set_present(klass, student.id, day)
+    SessionLocal.delete(pc)
+    SessionLocal.commit()
+    flash('Added ' + name + ' and marked present.', 'ok')
+    return redirect(url_for('view_class', class_id=class_id))
+
+
+@app.route('/classes/<int:class_id>/pending/<int:pid>/alias', methods=['POST'])
+@login_required
+def pending_alias(class_id, pid):
+    klass = get_owned_class(class_id)
+    pc = _get_pending(klass, pid)
+    student = _get_student(klass, int(request.form.get('student_id', 0) or 0))
+    typed, day = pc.name, pc.day
+    if not any(a.name.strip().lower() == typed.strip().lower() for a in student.aliases):
+        SessionLocal.add(Alias(student_id=student.id, name=typed))
+    set_present(klass, student.id, day)
+    SessionLocal.delete(pc)
+    SessionLocal.commit()
+    flash('"' + typed + '" linked to ' + student.name + ' and marked present.', 'ok')
+    return redirect(url_for('view_class', class_id=class_id))
+
+
+@app.route('/classes/<int:class_id>/pending/<int:pid>/dismiss', methods=['POST'])
+@login_required
+def pending_dismiss(class_id, pid):
+    klass = get_owned_class(class_id)
+    pc = _get_pending(klass, pid)
+    SessionLocal.delete(pc)
+    SessionLocal.commit()
+    flash('Dismissed check-in.', 'ok')
     return redirect(url_for('view_class', class_id=class_id))
 
 
@@ -431,48 +570,41 @@ def api_class_mark(class_id):
     return jsonify({'id': body['id'], 'present': present})
 
 
-# ── Public student self-marking (token-scoped, no login) ─────────────────────
+# ── Public student self check-in (token-scoped, no login) ────────────────────
 @app.route('/m/<token>')
 def mark_page(token):
     klass = get_class_by_token(token)
     return render_template('mark.html', klass=klass, token=token,
-                           **state_payload(klass))
+                           today=fmt_date(date.today()))
 
 
-@app.route('/api/m/<token>/state')
+@app.route('/api/m/<token>/checkin', methods=['POST'])
 @csrf.exempt
-def api_public_state(token):
-    klass = get_class_by_token(token)
-    return jsonify(state_payload(klass))
-
-
-@app.route('/api/m/<token>/mark', methods=['POST'])
-@csrf.exempt
-def api_public_mark(token):
+def api_public_checkin(token):
+    """Student types their name. Match -> present. No match -> pending for teacher."""
     klass = get_class_by_token(token)
     if not klass.self_mark_enabled:
-        return jsonify({'ok': False, 'error': 'Self check-in is closed.'}), 403
-    body = request.get_json(silent=True) or {}
-    set_present(klass, int(body['id']), date.today())  # one-way: never un-marks
-    return jsonify({'ok': True, 'id': body['id'], 'present': True})
-
-
-@app.route('/api/m/<token>/add', methods=['POST'])
-@csrf.exempt
-def api_public_add(token):
-    klass = get_class_by_token(token)
-    if not klass.self_mark_enabled:
-        return jsonify({'ok': False, 'error': 'Self check-in is closed.'}), 403
+        return jsonify({'ok': False, 'error': 'Check-in is closed.'}), 403
     body = request.get_json(silent=True) or {}
     name = (body.get('name') or '').strip()
     if not name:
-        return jsonify({'ok': False, 'error': 'Name is required.'}), 400
-    add_names(klass, [name])
-    student = SessionLocal.scalar(
-        select(Student).where(Student.class_id == klass.id, Student.name == name))
+        return jsonify({'ok': False, 'error': 'Please enter your name.'}), 400
+
+    today = date.today()
+    student = find_student(klass, name)
     if student:
-        set_present(klass, student.id, date.today())  # mark present (one-way)
-    return jsonify({'ok': True})
+        already = SessionLocal.scalar(select(Attendance).where(
+            Attendance.student_id == student.id, Attendance.day == today)) is not None
+        set_present(klass, student.id, today)
+        return jsonify({'ok': True, 'status': 'already' if already else 'present',
+                        'name': student.name})
+
+    # Unmatched — record as pending (dedupe same name + day) for the teacher to resolve.
+    key = name.lower()
+    if not any(p.day == today and p.name.strip().lower() == key for p in klass.pending):
+        SessionLocal.add(PendingCheckin(class_id=klass.id, name=name, day=today))
+        SessionLocal.commit()
+    return jsonify({'ok': True, 'status': 'pending', 'name': name})
 
 
 if __name__ == '__main__':

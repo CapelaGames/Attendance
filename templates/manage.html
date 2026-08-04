@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Manage {{ klass.name }} — Attendance{% endblock %}
+{% block body %}
+<header>
+  <div class="brand">
+    <h1>{{ klass.name }} — Roster</h1>
+    <div class="sub">Rename or remove students, manage aliases</div>
+  </div>
+  <div class="header-right">
+    <a href="{{ url_for('view_class', class_id=klass.id) }}" class="btn">← Back to class</a>
+  </div>
+</header>
+
+<div class="flash-wrap">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+</div>
+
+<div class="container" style="max-width: 720px;">
+  {% if students %}
+    <p style="color: var(--muted); font-size: .82rem; margin-bottom: 14px;">
+      {{ students|length }} student{{ '' if students|length == 1 else 's' }}. Aliases are alternate
+      names (e.g. nicknames) that also check a student in.
+    </p>
+    {% for s in students %}
+    <div class="card-panel" style="margin-bottom: 10px;">
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <form method="post" action="{{ url_for('rename_student', class_id=klass.id, sid=s.id) }}"
+              style="display: flex; gap: 6px; flex: 1 1 240px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="text" name="name" value="{{ s.name }}" style="flex: 1;">
+          <button class="btn primary">Save</button>
+        </form>
+        <form method="post" action="{{ url_for('delete_student', class_id=klass.id, sid=s.id) }}"
+              onsubmit="return confirm('Delete {{ s.name|e }} and all their attendance? This cannot be undone.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn danger">Delete</button>
+        </form>
+      </div>
+      {% if s.aliases %}
+      <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+        <span style="font-size: .78rem; color: var(--muted);">Aliases:</span>
+        {% for a in s.aliases %}
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--bg);
+                     border: 1px solid var(--border); border-radius: 20px; padding: 3px 6px 3px 12px;
+                     font-size: .82rem;">
+          {{ a.name }}
+          <form method="post" action="{{ url_for('delete_alias', class_id=klass.id, aid=a.id) }}"
+                style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn" style="padding: 1px 8px; border-radius: 20px;" title="Remove alias">×</button>
+          </form>
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty">
+      <p>No students yet. Add them from the class page with <b>+ Add students</b>.</p>
+      <a href="{{ url_for('view_class', class_id=klass.id) }}" class="btn primary" style="margin-top: 12px;">Go to class</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -10,6 +10,7 @@
     <div class="date-pill">{{ today }}</div>
     <button class="btn" onclick="openAdd()">+ Add students</button>
     <a href="{{ url_for('share_class', class_id=klass.id) }}" class="btn primary">Share / QR</a>
+    <a href="{{ url_for('manage_class', class_id=klass.id) }}" class="btn">Manage roster</a>
     <a href="{{ url_for('class_sheet', class_id=klass.id) }}" class="btn">Full sheet</a>
     <a href="{{ url_for('dashboard') }}" class="btn">← Classes</a>
   </div>
@@ -20,6 +21,46 @@
     {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% endwith %}
 </div>
+
+{% if pending %}
+<div style="padding: 12px 28px 0;">
+  <div class="card-panel" style="border-color: var(--accent);">
+    <h2 style="font-size: 1rem; margin-bottom: 4px;">Unmatched check-ins ({{ pending|length }})</h2>
+    <p style="font-size: .82rem; color: var(--muted); margin-bottom: 8px;">
+      These people typed a name that didn't match your list. Create them as a new student
+      (edit the name to fix a typo), link them to an existing student as an alias, or dismiss.
+    </p>
+    {% for p in pending %}
+    <div style="border-top: 1px solid var(--border); padding: 12px 0; display: flex;
+                flex-wrap: wrap; gap: 10px; align-items: center;">
+      <div style="flex: 1 1 140px; min-width: 120px;">
+        <b>{{ p.name }}</b>
+        <span style="color: var(--muted); font-size: .78rem;"> · {{ p.day.strftime('%d/%m/%Y') }}</span>
+      </div>
+      <form method="post" action="{{ url_for('pending_create', class_id=klass.id, pid=p.id) }}"
+            style="display: flex; gap: 6px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="name" value="{{ p.name }}" style="width: 150px;">
+        <button class="btn primary" title="Create a new student with this name">Create student</button>
+      </form>
+      <form method="post" action="{{ url_for('pending_alias', class_id=klass.id, pid=p.id) }}"
+            style="display: flex; gap: 6px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <select name="student_id" required style="width: 170px;">
+          <option value="" disabled selected>Alias of…</option>
+          {% for s in students %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+        <button class="btn" title="Link this name to the chosen student and mark them present">Link &amp; mark</button>
+      </form>
+      <form method="post" action="{{ url_for('pending_dismiss', class_id=klass.id, pid=p.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn danger">Dismiss</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <div class="search-wrap">
   <input type="search" id="search" placeholder="Search a name…" autocomplete="off">

@@ -1,38 +1,88 @@
 {% extends "base.html" %}
 {% block title %}{{ klass.name }} — Check in{% endblock %}
+{% block head %}
+<style>
+  .checkin { max-width: 520px; margin: 0 auto; padding: 48px 24px; }
+  .checkin input[type="text"] { font-size: 1.3rem; padding: 18px 20px; text-align: center; }
+  .checkin button { width: 100%; padding: 16px; font-size: 1.1rem; margin-top: 14px; }
+  #result {
+    margin-top: 22px; text-align: center; font-size: 1.05rem; min-height: 26px;
+    line-height: 1.5;
+  }
+  #result.present { color: var(--green-text); }
+  #result.pending { color: #b39ddb; }
+  #result.err { color: var(--red); }
+  .checkin .hint { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 18px; }
+</style>
+{% endblock %}
 {% block body %}
 <header>
   <div class="brand">
     <h1>{{ klass.name }}</h1>
-    <div class="sub">Type your name, then tap it to check in</div>
+    <div class="sub">Enter your name to check in</div>
   </div>
-  <div class="header-right">
-    <div class="date-pill">{{ today }}</div>
-  </div>
+  <div class="header-right"><div class="date-pill">{{ today }}</div></div>
 </header>
 
-{% if not klass.self_mark_enabled %}
-<div class="flash-wrap"><div class="flash warn">Check-in is currently closed for this class.</div></div>
-{% endif %}
-
-<div class="search-wrap">
-  <input type="search" id="search" placeholder="Type your name to check in…" autocomplete="off">
+<div class="checkin">
+  {% if not klass.self_mark_enabled %}
+    <div class="flash warn" style="text-align:center;">Check-in is currently closed for this class.</div>
+  {% else %}
+    <div class="card-panel">
+      <label for="name" style="text-align:center; font-size:.95rem; margin-bottom:10px;">Your full name</label>
+      <input type="text" id="name" autocomplete="name" autocapitalize="words"
+             placeholder="Type your name…" enterkeyhint="done">
+      <button class="btn primary" id="go">Check in</button>
+      <div id="result"></div>
+      <p class="hint">Type your name exactly. If it's not on the list yet, your teacher will confirm you.</p>
+    </div>
+  {% endif %}
 </div>
-<div class="stats" id="stats"></div>
-<div class="grid" id="grid"></div>
-
-<script id="init-state" type="application/json">{{ {'students': students}|tojson }}</script>
 {% endblock %}
 
 {% block scripts %}
+{% if klass.self_mark_enabled %}
 <script>
-  const state = JSON.parse(document.getElementById('init-state').textContent);
-  const STATE_URL = "{{ url_for('api_public_state', token=token) }}";
-  const MARK_URL = "{{ url_for('api_public_mark', token=token) }}";
-  const ADD_URL = "{{ url_for('api_public_add', token=token) }}";
-  const CSRF = null;
-  const REQUIRE_SEARCH = true;  // hide the roster; students find themselves by name
-  const PRESENT_ONLY = true;    // one-way check-in: nobody can be un-marked here
+  const CHECKIN_URL = "{{ url_for('api_public_checkin', token=token) }}";
+  const nameEl = document.getElementById('name');
+  const goEl = document.getElementById('go');
+  const resultEl = document.getElementById('result');
+
+  function show(cls, msg) { resultEl.className = cls; resultEl.textContent = msg; }
+
+  async function checkin() {
+    const name = nameEl.value.trim();
+    if (!name) { show('err', 'Please enter your name.'); nameEl.focus(); return; }
+    goEl.disabled = true;
+    show('', 'Checking in…');
+    try {
+      const res = await fetch(CHECKIN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) {
+        show('err', data.error || 'Something went wrong — try again.');
+      } else if (data.status === 'present') {
+        show('present', '✓  You’re checked in, ' + data.name + '.');
+        nameEl.value = '';
+      } else if (data.status === 'already') {
+        show('present', '✓  You were already checked in, ' + data.name + '.');
+        nameEl.value = '';
+      } else {  // pending
+        show('pending', '✓  Thanks ' + data.name + ' — sent to your teacher to confirm.');
+        nameEl.value = '';
+      }
+    } catch (e) {
+      show('err', 'Network error — please try again.');
+    }
+    goEl.disabled = false;
+  }
+
+  goEl.addEventListener('click', checkin);
+  nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') checkin(); });
+  nameEl.focus();
 </script>
-<script src="{{ url_for('static', filename='kiosk.js') }}"></script>
+{% endif %}
 {% endblock %}

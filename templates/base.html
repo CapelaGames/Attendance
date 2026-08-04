@@ -42,13 +42,14 @@
     .btn.danger:hover { border-color: var(--red); color: var(--red); }
 
     input[type="text"], input[type="email"], input[type="password"],
-    input[type="search"], textarea {
+    input[type="search"], textarea, select {
       width: 100%; background: var(--bg); border: 1px solid var(--border);
       border-radius: 10px; color: var(--text); font-size: 0.95rem;
       font-family: inherit; padding: 12px 14px; outline: none;
       transition: border-color .15s;
     }
-    input:focus, textarea:focus { border-color: var(--accent); }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    select option { background: var(--surface); color: var(--text); }
     label { display: block; font-size: 0.82rem; color: var(--muted); margin: 14px 0 6px; }
 
     .flash-wrap { padding: 12px 28px 0; }
