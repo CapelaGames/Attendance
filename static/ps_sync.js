@@ -11,6 +11,7 @@
   var EMPLID = 'RX_AT_ROST_GRID_EMPLID$';
   var ATTEND = 'RX_AT_ROST_GRID_RX_ATTENDANCE$';
   var DATE = 'CLASS_ATTENDNCE_CLASS_ATTEND_DT$';
+  var JUNK = /^(expand|collapse|select|clear|save|cancel|present|absent|excused|yes|no|satisfactory|unsatisfactory|ungraded)$/i;
 
   /* PeopleSoft renders the component inside a same-origin content iframe, so the
      grid usually lives in a child document rather than the one we were clicked on. */
@@ -66,15 +67,23 @@
       var cells = [];
       var tr = el.closest ? el.closest('tr') : null;
       if (tr) {
-        var nodes = tr.querySelectorAll('td, div, span, a, input');
-        for (var j = 0; j < nodes.length; j++) {
+        var nodes = tr.querySelectorAll('td, div, span, a');
+        for (var j = 0; j < nodes.length && cells.length < 4; j++) {
+          /* Skip anything wrapping a form control — a cell holding the attendance
+             dropdown reads as its concatenated option labels, not a name. */
+          if (nodes[j].querySelector && nodes[j].querySelector('select, textarea, input')) {
+            continue;
+          }
           var t = cellText(nodes[j]);
-          if (t.length >= 2 && t.length <= 60 && /[A-Za-z]/.test(t) && cells.indexOf(t) === -1) {
+          /* Keep name-ish cells only: the payload travels in a URL, and times,
+             dates, IDs and button labels are all noise for matching. */
+          if (t.length >= 2 && t.length <= 40 && /[A-Za-z]/.test(t) && !/\d/.test(t) &&
+              !JUNK.test(t) && cells.indexOf(t) === -1) {
             cells.push(t);
           }
         }
       }
-      out.push({ row: row, emplid: emplid, cells: cells.slice(0, 16) });
+      out.push({ row: row, emplid: emplid, cells: cells });
     }
     return out;
   }
@@ -169,8 +178,13 @@
      page's COOP may sever the link between the windows, in which case the popup
      shows the list for copying and we ask for a paste instead. */
   function viaBridge(doc, rows, day) {
+    /* Only emplid and names travel — row indexes stay here, where they're used. */
+    var sending = [];
+    for (var i = 0; i < rows.length; i++) {
+      sending.push({ emplid: rows[i].emplid, cells: rows[i].cells });
+    }
     var url = BRIDGE + '?p=' + encodeURIComponent(
-      JSON.stringify({ date: day, rows: rows }));
+      JSON.stringify({ date: day, rows: sending }));
     var win = window.open(url, 'attendance_bridge', 'width=520,height=440');
     if (!win) {
       pasteFallback(doc, rows, day, 'popup blocked — allow popups for this site');
