@@ -48,6 +48,7 @@
         <div style="font-size: .8rem; color: var(--muted); margin-top: 3px;">
           {{ k.students|length }} student{{ '' if k.students|length == 1 else 's' }}
           {% if not k.self_mark_enabled %}· <span style="color:var(--red)">check-in closed</span>{% endif %}
+          {% if k.ps_class_nbr %}· PeopleSoft {{ k.ps_class_nbr }}{% endif %}
         </div>
       </div>
       <span class="btn">Open →</span>

@@ -13,7 +13,10 @@
     <a href="{{ url_for('manage_class', class_id=klass.id) }}" class="btn">Manage roster</a>
     <a href="{{ url_for('class_sheet', class_id=klass.id) }}" class="btn">Full sheet</a>
     {% if current_user.ps_upload_enabled %}
-      <a href="{{ url_for('sync_page', class_id=klass.id) }}" class="btn">PeopleSoft</a>
+      <a href="{{ url_for('sync_page', class_id=klass.id) }}" class="btn"
+         title="{% if klass.ps_class_nbr %}Linked to PeopleSoft class {{ klass.ps_class_nbr }}{% if klass.ps_label %} — {{ klass.ps_label }}{% endif %}{% else %}Not linked to a PeopleSoft class yet{% endif %}">
+        PeopleSoft{% if klass.ps_class_nbr %} · {{ klass.ps_class_nbr }}{% endif %}
+      </a>
     {% endif %}
     <a href="{{ url_for('dashboard') }}" class="btn">← Classes</a>
   </div>
