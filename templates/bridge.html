@@ -13,13 +13,17 @@
            padding: 10px; border: 1px solid #bbb; border-radius: 6px; height: 90px; }
     button { font: 13px system-ui, sans-serif; padding: 8px 14px; border-radius: 6px;
              border: 1px solid #bbb; background: #f4f4f4; cursor: pointer; }
-    #manual { display: none; }
+    #manual, #picker { display: none; }
+    #picker button { display: block; width: 100%; text-align: left; margin-bottom: 8px; }
+    #picker .nbr { color: #777; font-size: 12px; }
     ol { margin: 8px 0 0; padding-left: 20px; color: #555; font-size: 13px; }
   </style>
 </head>
 <body>
   <h1>Attendance sync</h1>
   <p id="status">Working…</p>
+
+  <div id="picker"></div>
 
   <div id="manual">
     <textarea id="ids" readonly></textarea>
@@ -58,13 +62,51 @@
     }
 
     function asJson(r) {
-      if (r.status === 409) {
+      if (r.status === 400 || r.status === 409) {
         return r.json().then(function (j) {
-          throw new Error(j.message || 'That roster belongs to a different class.');
+          var err = new Error(j.message || 'That roster belongs to a different class.');
+          err.data = j;
+          throw err;
         });
       }
       if (!r.ok) { throw new Error('HTTP ' + r.status + ' from the attendance app'); }
       return r.json();
+    }
+
+    /* The roster names its class and we know the teacher's classes, so the link
+       can be made here instead of sending them off to another page. */
+    function showPicker(info) {
+      var picker = document.getElementById('picker');
+      picker.innerHTML = '';
+      picker.style.display = 'block';
+      say(info.message, 'err');
+
+      info.classes.forEach(function (k) {
+        var b = document.createElement('button');
+        b.innerHTML = '';
+        b.appendChild(document.createTextNode(k.name));
+        if (k.linked_to) {
+          var small = document.createElement('span');
+          small.className = 'nbr';
+          small.textContent = '  (currently linked to ' + k.linked_to + ')';
+          b.appendChild(small);
+        }
+        b.addEventListener('click', function () {
+          picker.style.display = 'none';
+          say('Linking ' + k.name + '…');
+          fetch(API + '/link', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ class_id: k.id, class_nbr: info.class_nbr,
+                                   label: payload.label || '' })
+          }).then(asJson).then(function () { runSync(); })
+            .catch(function (e) {
+              say(String(e.message || e), 'err');
+              if (e.data && e.data.classes) { showPicker(e.data); }
+              else { picker.style.display = 'block'; }
+            });
+        });
+        picker.appendChild(b);
+      });
     }
 
     /* Always shown. If the roster page also receives the postMessage it closes
@@ -111,9 +153,7 @@
         (location.search.match(/[?&]p=([^&]*)/) || [])[1] || ''));
     } catch (e) { payload = null; }
 
-    if (!payload || !payload.date) {
-      say('Open this from the Attendance bookmark on a PeopleSoft roster page.', 'err');
-    } else {
+    function runSync() {
       say('Matching students…');
       fetch(API + '/roster', {
         method: 'POST',
@@ -150,10 +190,20 @@
             });
           });
       }).catch(function (err) {
+        if (err.data && err.data.classes && err.data.classes.length) {
+          showPicker(err.data);
+          return;
+        }
         var message = String(err.message || err);
         say(message, 'err');
         tell({ type: 'error', message: message });
       });
+    }
+
+    if (!payload || !payload.date) {
+      say('Open this from the Attendance bookmark on a PeopleSoft roster page.', 'err');
+    } else {
+      runSync();
     }
   </script>
 </body>

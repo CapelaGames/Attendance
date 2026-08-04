@@ -895,15 +895,42 @@ def sync_bridge_all(token):
 
 
 def no_class_linked(teacher: Teacher, class_nbr: str):
-    linked = [f'{k.ps_class_nbr} → {k.name}' for k in teacher.classes if k.ps_class_nbr]
-    detail = ('Linked so far: ' + '; '.join(linked)) if linked else \
-             'None of your classes are linked yet.'
+    """Offer the teacher's classes so the link can be made here and now."""
     return jsonify({
-        'ok': False, 'mismatch': True,
+        'ok': False, 'mismatch': True, 'class_nbr': class_nbr,
         'message': (f'No class in your attendance app is linked to PeopleSoft class '
-                    f'{class_nbr or "(unknown)"}. Open the right class, go to its '
-                    f'PeopleSoft page, and link it. {detail}'),
+                    f'{class_nbr or "(unknown)"} yet. Which class is this?'),
+        'classes': [{'id': k.id, 'name': k.name, 'linked_to': k.ps_class_nbr}
+                    for k in sorted(teacher.classes, key=lambda k: k.name.lower())],
     }), 409
+
+
+@app.route('/api/tsync/<token>/link', methods=['POST'])
+@csrf.exempt
+def api_tsync_link(token):
+    """Link a class from the sync window, rather than sending them elsewhere."""
+    teacher = SessionLocal.scalar(select(Teacher).where(Teacher.sync_token == token))
+    if teacher is None:
+        abort(404)
+    if not teacher.ps_upload_enabled:
+        abort(403)
+
+    body = request.get_json(force=True, silent=True) or {}
+    class_nbr = str(body.get('class_nbr') or '').strip()
+    klass = next((k for k in teacher.classes if k.id == body.get('class_id')), None)
+    if klass is None or not class_nbr:
+        return jsonify({'ok': False, 'message': 'Pick one of your classes.'}), 400
+
+    clash = next((k for k in teacher.classes
+                  if k.ps_class_nbr == class_nbr and k.id != klass.id), None)
+    if clash is not None:
+        return jsonify({'ok': False,
+                        'message': f'Class {class_nbr} is already linked to {clash.name}.'}), 409
+
+    klass.ps_class_nbr = class_nbr
+    klass.ps_label = (str(body.get('label') or '').strip() or None)
+    SessionLocal.commit()
+    return jsonify({'ok': True, 'klass': klass.name, 'class_nbr': class_nbr})
 
 
 @app.route('/api/tsync/<token>/roster', methods=['POST'])
